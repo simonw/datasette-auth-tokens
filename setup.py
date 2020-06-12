@@ -1,7 +1,7 @@
 from setuptools import setup
 import os
 
-VERSION = "0.1"
+VERSION = "0.1.1"
 
 
 def get_long_description():
@@ -23,7 +23,7 @@ setup(
     version=VERSION,
     packages=["datasette_auth_tokens"],
     entry_points={"datasette": ["auth_tokens = datasette_auth_tokens"]},
-    install_requires=["datasette",],
+    install_requires=["datasette>=0.44",],
     extras_require={"test": ["pytest", "pytest-asyncio", "httpx"]},
     tests_require=["datasette-auth-tokens[test]"],
 )

@@ -6,8 +6,6 @@
 
 Datasette plugin for authenticating access using API tokens
 
-**This only works with the next, unreleased version of Datasette**
-
 ## Installation
 
 Install this plugin in the same environment as Datasette.
