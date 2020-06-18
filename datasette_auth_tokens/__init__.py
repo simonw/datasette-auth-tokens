@@ -5,8 +5,6 @@ import secrets
 @hookimpl
 def actor_from_request(datasette, request):
     allowed_tokens = datasette.plugin_config("datasette-auth-tokens") or []
-    print(allowed_tokens)
-    print(request.headers)
     authorization = request.headers.get("authorization")
     if not authorization:
         return None
