@@ -4,7 +4,7 @@ import pytest
 
 
 @pytest.fixture
-async def ds(tmpdir):
+async def ds():
     return Datasette(
         [],
         memory=True,
