@@ -12,7 +12,7 @@ Install this plugin in the same environment as Datasette.
 
     $ pip install datasette-auth-tokens
 
-## Usage
+## Simple usage: a hard-coded list of tokens
 
 Read about Datasette's [authentication and permissions system](https://datasette.readthedocs.io/en/latest/authentication.html).
 
