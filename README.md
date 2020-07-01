@@ -12,7 +12,7 @@ Install this plugin in the same environment as Datasette.
 
     $ pip install datasette-auth-tokens
 
-## Simple usage: a hard-coded list of tokens
+## Hard-coded tokens
 
 Read about Datasette's [authentication and permissions system](https://datasette.readthedocs.io/en/latest/authentication.html).
 
@@ -36,16 +36,18 @@ You can then use `"allow"` blocks to provide that token with permission to acces
 ```json
 {
     "plugins": {
-        "datasette-auth-tokens": [
-            {
-                "token": {
-                    "$env": "BOT_TOKEN"
-                },
-                "actor": {
-                    "bot_id": "my-bot"
+        "datasette-auth-tokens": {
+            "tokens": [
+                {
+                    "token": {
+                        "$env": "BOT_TOKEN"
+                    },
+                    "actor": {
+                        "bot_id": "my-bot"
+                    }
                 }
-            }
-        ]
+            ]
+        }
     },
     "databases": {
         ":memory:": {
@@ -60,7 +62,6 @@ You can then use `"allow"` blocks to provide that token with permission to acces
         }
     }
 }
-
 ```
 This uses Datasette's [secret configuration values mechanism](https://datasette.readthedocs.io/en/stable/plugins.html#secret-configuration-values) to allow the secret token to be passed as an environment variable.
 
@@ -74,3 +75,33 @@ You can now run authenticated API queries like this:
     $ curl -H 'Authorization: Bearer this-is-the-secret-token' \
       'http://127.0.0.1:8001/:memory:/show_version.json?_shape=array'
     [{"sqlite_version()": "3.31.1"}]
+
+## Tokens from your database
+
+As an alternative (or in addition) to the hard-coded list of tokens you can store tokens in a database table and configure the plugin to access them using a SQL query.
+
+Your query needs to take a `:token_id` parameter and return at least two columns: one called `token_secret` and one called `actor_*` - usually `actor_id`. Further `actor_` prefixed columns can be returned to provide more details for the authenticated actor.
+
+Here's a simple example of a configuration query:
+
+```sql
+select actor_id, actor_name, token_secret from tokens where token_id = :token_id
+```
+
+This can run against a table like this one:
+
+| token_id | token_secret | actor_id | actor_name |
+| -------- | ------------ | -------- | ---------- |
+| 1        | bd3c94f51fcd | 78       | Cleopaws   |
+| 2        | 86681b4d6f66 | 32       | Pancakes   |
+
+The tokens are formed as the token id, then a hyphen, then the token secret. For example:
+
+- `1-bd3c94f51fcd`
+- `2-86681b4d6f66`
+
+The SQL query will be executed with the portion before the hyphen as the `:token_id` parameter.
+
+The `token_secret` value returned by the query will be comepared to the portion of the token after the hyphen to check if the token is valid.
+
+Columns with a prefix of `actor_` will be used to populate the actor dictionary. In the above example, a token of `2-86681b4d6f66` will become an actor dictionary of `{"id": 32, "name": "Pancakes"}`.
