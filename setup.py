@@ -24,6 +24,6 @@ setup(
     packages=["datasette_auth_tokens"],
     entry_points={"datasette": ["auth_tokens = datasette_auth_tokens"]},
     install_requires=["datasette>=0.44",],
-    extras_require={"test": ["pytest", "pytest-asyncio", "httpx"]},
+    extras_require={"test": ["pytest", "pytest-asyncio", "httpx", "sqlite-utils"]},
     tests_require=["datasette-auth-tokens[test]"],
 )
