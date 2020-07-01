@@ -105,3 +105,30 @@ The SQL query will be executed with the portion before the hyphen as the `:token
 The `token_secret` value returned by the query will be comepared to the portion of the token after the hyphen to check if the token is valid.
 
 Columns with a prefix of `actor_` will be used to populate the actor dictionary. In the above example, a token of `2-86681b4d6f66` will become an actor dictionary of `{"id": 32, "name": "Pancakes"}`.
+
+To configure this, use a `"query"` block in your plugin configuration like this:
+
+```json
+{
+    "plugins": {
+        "datasette-auth-tokens": {
+            "query": {
+                "sql": "select actor_id, actor_name, token_secret from tokens where token_id = :token_id",
+                "database": "tokens"
+            }
+        }
+    },
+    "databases": {
+        "tokens": {
+            "allow": {}
+        }
+    }
+}
+```
+The `"sql"` key here contains the SQL query. The `"database"` key has the name of the attached database file that the query should be executed against - in this case it would execute against `tokens.db`.
+
+### Securing your tokens
+
+Anyone with access to your Datasette instance can use it to read the `token_secret` column in your tokens table. This probably isn't what you want!
+
+To avoid this, you should lock down access to that table. The configuration example above shows how to do this using an `"allow": {}` block. Consult Datasette's [Permissions documentation](https://datasette.readthedocs.io/en/stable/authentication.html#permissions) for more information about how to lock down this kind of access.
