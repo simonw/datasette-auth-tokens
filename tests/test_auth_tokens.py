@@ -4,7 +4,7 @@ import pytest
 import sqlite_utils
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 async def ds(tmp_path_factory):
     db_directory = tmp_path_factory.mktemp("dbs")
     db_path1 = db_directory / "test1.db"
