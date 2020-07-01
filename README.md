@@ -36,16 +36,18 @@ You can then use `"allow"` blocks to provide that token with permission to acces
 ```json
 {
     "plugins": {
-        "datasette-auth-tokens": [
-            {
-                "token": {
-                    "$env": "BOT_TOKEN"
-                },
-                "actor": {
-                    "bot_id": "my-bot"
+        "datasette-auth-tokens": {
+            "tokens": [
+                {
+                    "token": {
+                        "$env": "BOT_TOKEN"
+                    },
+                    "actor": {
+                        "bot_id": "my-bot"
+                    }
                 }
-            }
-        ]
+            ]
+        }
     },
     "databases": {
         ":memory:": {
@@ -60,7 +62,6 @@ You can then use `"allow"` blocks to provide that token with permission to acces
         }
     }
 }
-
 ```
 This uses Datasette's [secret configuration values mechanism](https://datasette.readthedocs.io/en/stable/plugins.html#secret-configuration-values) to allow the secret token to be passed as an environment variable.
 

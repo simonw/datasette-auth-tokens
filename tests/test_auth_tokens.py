@@ -10,10 +10,12 @@ async def ds():
         memory=True,
         metadata={
             "plugins": {
-                "datasette-auth-tokens": [
-                    {"token": "one", "actor": {"id": "one"}},
-                    {"token": "two", "actor": {"id": "two"}},
-                ]
+                "datasette-auth-tokens": {
+                    "tokens": [
+                        {"token": "one", "actor": {"id": "one"}},
+                        {"token": "two", "actor": {"id": "two"}},
+                    ]
+                }
             },
             "databases": {":memory:": {"allow_sql": {"id": "one"},}},
         },
