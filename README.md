@@ -102,7 +102,7 @@ The tokens are formed as the token id, then a hyphen, then the token secret. For
 
 The SQL query will be executed with the portion before the hyphen as the `:token_id` parameter.
 
-The `token_secret` value returned by the query will be comepared to the portion of the token after the hyphen to check if the token is valid.
+The `token_secret` value returned by the query will be compared to the portion of the token after the hyphen to check if the token is valid.
 
 Columns with a prefix of `actor_` will be used to populate the actor dictionary. In the above example, a token of `2-86681b4d6f66` will become an actor dictionary of `{"id": 32, "name": "Pancakes"}`.
 
