@@ -95,7 +95,7 @@ This can run against a table like this one:
 | 1        | bd3c94f51fcd | 78       | Cleopaws   |
 | 2        | 86681b4d6f66 | 32       | Pancakes   |
 
-The tokens are formed as the token id, then a hyphen, then the token secret. For example:
+The tokens are formed as the token ID, then a hyphen, then the token secret. For example:
 
 - `1-bd3c94f51fcd`
 - `2-86681b4d6f66`
