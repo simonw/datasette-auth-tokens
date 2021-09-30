@@ -89,7 +89,7 @@ async def test_token(ds, token, path, expected_status):
 async def test_query_param(ds, token, path, expected_status):
     async with httpx.AsyncClient(app=ds.app()) as client:
         response = await client.get(
-            "http://localhost{}&_auth_token={token}".format(path, token),
+            "http://localhost{}&_auth_token={}".format(path, token),
         )
         assert expected_status == response.status_code
 

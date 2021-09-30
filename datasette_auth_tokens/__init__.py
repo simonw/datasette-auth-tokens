@@ -17,6 +17,8 @@ def actor_from_request(datasette, request):
             query_param_token = request.args.get(query_param)
             if query_param_token:
                 incoming_token = query_param_token
+            else:
+                return None
         else:
             return None
         # First try hard-coded tokens in the list
