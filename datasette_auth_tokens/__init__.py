@@ -7,12 +7,18 @@ def actor_from_request(datasette, request):
     async def inner():
         config = datasette.plugin_config("datasette-auth-tokens") or {}
         allowed_tokens = config.get("tokens") or []
+        query_param = config.get("param")
         authorization = request.headers.get("authorization")
-        if not authorization:
+        if authorization:
+            if not authorization.startswith("Bearer "):
+                return None
+            incoming_token = authorization[len("Bearer "):]
+        elif query_param:
+            query_param_token = request.args.get(query_param)
+            if query_param_token:
+                incoming_token = query_param_token
+        else:
             return None
-        if not authorization.startswith("Bearer "):
-            return None
-        incoming_token = authorization[len("Bearer ") :]
         # First try hard-coded tokens in the list
         for token in allowed_tokens:
             if secrets.compare_digest(token["token"], incoming_token):
