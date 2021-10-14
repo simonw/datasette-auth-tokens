@@ -19,6 +19,11 @@ setup(
     long_description_content_type="text/markdown",
     author="Simon Willison",
     url="https://github.com/simonw/datasette-auth-tokens",
+    project_urls={
+        "Issues": "https://github.com/simonw/datasette-auth-tokens/issues",
+        "CI": "https://github.com/simonw/datasette-auth-tokens/actions",
+        "Changelog": "https://github.com/simonw/datasette-auth-tokens/releases",
+    },
     license="Apache License, Version 2.0",
     version=VERSION,
     packages=["datasette_auth_tokens"],
