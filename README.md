@@ -77,6 +77,47 @@ You can now run authenticated API queries like this:
       'http://127.0.0.1:8001/:memory:/show_version.json?_shape=array'
     [{"sqlite_version()": "3.31.1"}]
 
+Additionally you can allow passing the token as a query string parameter, although that's disabled by default given the security implications of URLs with secret tokens included. This may be useful to easily allow embedding data between different services.
+
+Simply enable it using the `param` config value:
+
+```json
+{
+    "plugins": {
+        "datasette-auth-tokens": {
+            "tokens": [
+                {
+                    "token": {
+                        "$env": "BOT_TOKEN"
+                    },
+                    "actor": {
+                        "bot_id": "my-bot"
+                    },
+                }
+            ],
+            "param": "_auth_token"
+        }
+    },
+    "databases": {
+        ":memory:": {
+            "queries": {
+                "show_version": {
+                    "sql": "select sqlite_version()",
+                    "allow": {
+                        "bot_id": "my-bot"
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+You can now run authenticated API queries like this:
+
+    $ curl http://127.0.0.1:8001/:memory:/show_version.json?_shape=array&_auth_token=this-is-the-secret-token
+    [{"sqlite_version()": "3.31.1"}]
+
 ## Tokens from your database
 
 As an alternative (or in addition) to the hard-coded list of tokens you can store tokens in a database table and configure the plugin to access them using a SQL query.
