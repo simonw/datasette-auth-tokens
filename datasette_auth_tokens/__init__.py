@@ -12,7 +12,7 @@ def actor_from_request(datasette, request):
         if authorization:
             if not authorization.startswith("Bearer "):
                 return None
-            incoming_token = authorization[len("Bearer "):]
+            incoming_token = authorization[len("Bearer ") :]
         elif query_param:
             query_param_token = request.args.get(query_param)
             if query_param_token:

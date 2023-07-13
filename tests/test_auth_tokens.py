@@ -137,7 +137,12 @@ async def test_actor(ds, token, expected_actor):
 
 
 @pytest.mark.parametrize(
-    "path", ["/tokens", "/tokens/tokens", "/tokens?sql=select+*+from+tokens",],
+    "path",
+    [
+        "/tokens",
+        "/tokens/tokens",
+        "/tokens?sql=select+*+from+tokens",
+    ],
 )
 @pytest.mark.asyncio
 async def test_tokens_table_not_visible(ds, path):
