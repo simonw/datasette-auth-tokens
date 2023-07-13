@@ -1,10 +1,11 @@
 from datasette.app import Datasette
 import httpx
 import pytest
+import pytest_asyncio
 import sqlite_utils
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def ds(tmp_path_factory):
     db_directory = tmp_path_factory.mktemp("dbs")
     db_path1 = db_directory / "demo.db"
@@ -50,7 +51,6 @@ async def ds(tmp_path_factory):
             },
         },
     )
-    return ds
 
 
 @pytest.mark.parametrize(
