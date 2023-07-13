@@ -1,5 +1,7 @@
 from datasette import hookimpl
+import json
 import secrets
+import time
 from .views import create_api_token
 
 CREATE_TABLES_SQL = """
@@ -41,6 +43,8 @@ def register_routes(datasette):
 @hookimpl
 def actor_from_request(datasette, request):
     async def inner():
+        print("actor_from_request", request)
+
         config = _config(datasette)
         allowed_tokens = config.get("tokens") or []
         query_param = config.get("param")
@@ -57,6 +61,10 @@ def actor_from_request(datasette, request):
                 return None
         else:
             return None
+
+        if config.get("manage_tokens"):
+            return await _actor_from_managed(datasette, incoming_token)
+
         # First try hard-coded tokens in the list
         for token in allowed_tokens:
             if secrets.compare_digest(token["token"], incoming_token):
@@ -91,3 +99,41 @@ def actor_from_request(datasette, request):
 
 def _config(datasette):
     return datasette.plugin_config("datasette-auth-tokens") or {}
+
+
+async def _actor_from_managed(datasette, incoming_token):
+    print("_actor_from_managed", incoming_token)
+    db = datasette.get_database()
+    if not incoming_token.startswith("dsatok_"):
+        return None
+    incoming_token = incoming_token[len("dsatok_") :]
+    token_id, token_secret = incoming_token.split("_", 2)
+    results = await db.execute(
+        "select * from _datasette_auth_tokens where id=:token_id",
+        {"token_id": token_id},
+    )
+    row = results.first()
+    if not row:
+        return None
+    if not secrets.compare_digest(row["secret"], token_secret):
+        print("Bad secret!", row["secret"], token_secret)
+        return None
+
+    # TODO: check expiry
+
+    actor = {"id": row["actor_id"], "token": "dsatok"}
+    permissions = json.loads(row["permissions"])
+    if permissions:
+        print("Setting _r to ", permissions)
+        actor["_r"] = permissions
+
+    # Update last_used_timestamp if more than 60 seconds old
+    if row["last_used_timestamp"] is None or (
+        row["last_used_timestamp"] < (time.time() - 60)
+    ):
+        await db.execute_write(
+            "update _datasette_auth_tokens set last_used_timestamp=:now where id=:token_id",
+            {"now": int(time.time()), "token_id": token_id},
+        )
+
+    return actor

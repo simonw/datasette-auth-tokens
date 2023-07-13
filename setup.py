@@ -33,7 +33,5 @@ setup(
         "sqlite-utils",
     ],
     extras_require={"test": ["pytest", "pytest-asyncio", "httpx", "sqlite-utils"]},
-    package_data={
-        "datasette_auth_tokens": ["templates/*.html"]
-    },
+    package_data={"datasette_auth_tokens": ["templates/*.html"]},
 )
