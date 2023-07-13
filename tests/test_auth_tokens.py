@@ -1,5 +1,4 @@
 from datasette.app import Datasette
-import httpx
 import pytest
 import pytest_asyncio
 import sqlite_utils
@@ -35,7 +34,10 @@ async def ds(tmp_path_factory):
             "plugins": {
                 "datasette-auth-tokens": {
                     "query": {
-                        "sql": "select actor_id, actor_name, token_secret from tokens where id = :token_id",
+                        "sql": (
+                            "select actor_id, actor_name, token_secret "
+                            "from tokens where id = :token_id"
+                        ),
                         "database": "tokens",
                     },
                     "tokens": [
@@ -66,12 +68,11 @@ async def ds(tmp_path_factory):
 )
 @pytest.mark.asyncio
 async def test_token(ds, token, path, expected_status):
-    async with httpx.AsyncClient(app=ds.app()) as client:
-        response = await client.get(
-            "http://localhost{}".format(path),
-            headers={"Authorization": "Bearer {}".format(token)},
-        )
-        assert expected_status == response.status_code
+    response = await ds.client.get(
+        path,
+        headers={"Authorization": "Bearer {}".format(token)},
+    )
+    assert response.status_code == expected_status
 
 
 @pytest.mark.parametrize(
@@ -87,11 +88,10 @@ async def test_token(ds, token, path, expected_status):
 )
 @pytest.mark.asyncio
 async def test_query_param(ds, token, path, expected_status):
-    async with httpx.AsyncClient(app=ds.app()) as client:
-        response = await client.get(
-            "http://localhost{}&_auth_token={}".format(path, token),
-        )
-        assert expected_status == response.status_code
+    response = await ds.client.get(
+        "{}&_auth_token={}".format(path, token),
+    )
+    assert response.status_code == expected_status
 
 
 @pytest.mark.parametrize(
@@ -109,12 +109,11 @@ async def test_query_param(ds, token, path, expected_status):
 )
 @pytest.mark.asyncio
 async def test_query(ds, token, path, expected_status):
-    async with httpx.AsyncClient(app=ds.app()) as client:
-        response = await client.get(
-            "http://localhost{}".format(path),
-            headers={"Authorization": "Bearer {}".format(token)},
-        )
-        assert expected_status == response.status_code
+    response = await ds.client.get(
+        path,
+        headers={"Authorization": "Bearer {}".format(token)},
+    )
+    assert response.status_code == expected_status
 
 
 @pytest.mark.parametrize(
@@ -128,12 +127,11 @@ async def test_query(ds, token, path, expected_status):
 )
 @pytest.mark.asyncio
 async def test_actor(ds, token, expected_actor):
-    async with httpx.AsyncClient(app=ds.app()) as client:
-        response = await client.get(
-            "http://localhost/-/actor.json",
-            headers={"Authorization": "Bearer {}".format(token)},
-        )
-        assert {"actor": expected_actor} == response.json()
+    response = await ds.client.get(
+        "/-/actor.json",
+        headers={"Authorization": "Bearer {}".format(token)},
+    )
+    assert response.json() == {"actor": expected_actor}
 
 
 @pytest.mark.parametrize(
@@ -146,6 +144,5 @@ async def test_actor(ds, token, expected_actor):
 )
 @pytest.mark.asyncio
 async def test_tokens_table_not_visible(ds, path):
-    async with httpx.AsyncClient(app=ds.app()) as client:
-        response = await client.get("http://localhost{}".format(path))
-        assert 403 == response.status_code
+    response = await ds.client.get(path)
+    assert response.status_code == 403
