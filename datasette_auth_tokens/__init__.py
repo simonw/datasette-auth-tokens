@@ -1,11 +1,47 @@
 from datasette import hookimpl
 import secrets
+from .views import create_api_token
+
+CREATE_TABLES_SQL = """
+CREATE TABLE _datasette_auth_tokens (
+   id INTEGER PRIMARY KEY,
+   secret TEXT,
+   description TEXT,
+   permissions TEXT,
+   actor_id TEXT,
+   created_timestamp INTEGER,
+   last_used_timestamp INTEGER,
+   expires_after_seconds INTEGER
+);
+"""
+
+
+@hookimpl
+def startup(datasette):
+    config = _config(datasette)
+    if not config.get("manage_tokens"):
+        return
+
+    async def inner():
+        db = datasette.get_database()
+        if "_datasette_auth_tokens" not in await db.table_names():
+            await db.execute_write(CREATE_TABLES_SQL)
+
+    return inner
+
+
+@hookimpl
+def register_routes(datasette):
+    config = _config(datasette)
+    if not config.get("manage_tokens"):
+        return
+    return [(r"^/-/api/tokens/create$", create_api_token)]
 
 
 @hookimpl
 def actor_from_request(datasette, request):
     async def inner():
-        config = datasette.plugin_config("datasette-auth-tokens") or {}
+        config = _config(datasette)
         allowed_tokens = config.get("tokens") or []
         query_param = config.get("param")
         authorization = request.headers.get("authorization")
@@ -51,3 +87,7 @@ def actor_from_request(datasette, request):
                 }
 
     return inner
+
+
+def _config(datasette):
+    return datasette.plugin_config("datasette-auth-tokens") or {}
