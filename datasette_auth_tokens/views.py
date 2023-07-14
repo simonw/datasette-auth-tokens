@@ -77,16 +77,15 @@ async def create_api_token(request, datasette):
         permissions = token_bits.get("_r") or None
 
         db = datasette.get_database()
-        secret = secrets.token_urlsafe(16)
         cursor = await db.execute_write(
             """
             insert into _datasette_auth_tokens
-            (secret, description, permissions, actor_id, created_timestamp, expires_after_seconds)
+            (secret_id, description, permissions, actor_id, created_timestamp, expires_after_seconds)
             values
-            (:secret, :description, :permissions, :actor_id, :created_timestamp, :expires_after_seconds)
+            (:secret_id, :description, :permissions, :actor_id, :created_timestamp, :expires_after_seconds)
         """,
             {
-                "secret": secret,
+                "secret_id": 0,
                 "permissions": json.dumps(permissions),
                 "description": post.get("description") or None,
                 "actor_id": request.actor["id"],
@@ -94,7 +93,7 @@ async def create_api_token(request, datasette):
                 "expires_after_seconds": expires_after,
             },
         )
-        token = "dsatok_{}_{}".format(cursor.lastrowid, secret)
+        token = "dsatok_{}".format(datasette.sign(cursor.lastrowid, "dsatok"))
 
         context = await _shared(datasette, request)
         context.update({"errors": errors, "token": token, "token_bits": token_bits})

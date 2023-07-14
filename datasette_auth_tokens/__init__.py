@@ -7,7 +7,7 @@ from .views import create_api_token
 CREATE_TABLES_SQL = """
 CREATE TABLE _datasette_auth_tokens (
    id INTEGER PRIMARY KEY,
-   secret TEXT,
+   secret_id INTEGER,
    description TEXT,
    permissions TEXT,
    actor_id TEXT,
@@ -43,8 +43,6 @@ def register_routes(datasette):
 @hookimpl
 def actor_from_request(datasette, request):
     async def inner():
-        print("actor_from_request", request)
-
         config = _config(datasette)
         allowed_tokens = config.get("tokens") or []
         query_param = config.get("param")
@@ -102,12 +100,11 @@ def _config(datasette):
 
 
 async def _actor_from_managed(datasette, incoming_token):
-    print("_actor_from_managed", incoming_token)
     db = datasette.get_database()
     if not incoming_token.startswith("dsatok_"):
         return None
     incoming_token = incoming_token[len("dsatok_") :]
-    token_id, token_secret = incoming_token.split("_", 2)
+    token_id = datasette.unsign(incoming_token, "dsatok")
     results = await db.execute(
         "select * from _datasette_auth_tokens where id=:token_id",
         {"token_id": token_id},
@@ -115,16 +112,12 @@ async def _actor_from_managed(datasette, incoming_token):
     row = results.first()
     if not row:
         return None
-    if not secrets.compare_digest(row["secret"], token_secret):
-        print("Bad secret!", row["secret"], token_secret)
-        return None
 
     # TODO: check expiry
 
     actor = {"id": row["actor_id"], "token": "dsatok"}
     permissions = json.loads(row["permissions"])
     if permissions:
-        print("Setting _r to ", permissions)
         actor["_r"] = permissions
 
     # Update last_used_timestamp if more than 60 seconds old
