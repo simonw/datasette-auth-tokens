@@ -4,7 +4,6 @@ from datasette.utils import (
     tilde_decode,
 )
 import json
-import secrets
 import time
 
 
@@ -80,12 +79,12 @@ async def create_api_token(request, datasette):
         cursor = await db.execute_write(
             """
             insert into _datasette_auth_tokens
-            (secret_id, description, permissions, actor_id, created_timestamp, expires_after_seconds)
+            (secret_version, description, permissions, actor_id, created_timestamp, expires_after_seconds)
             values
-            (:secret_id, :description, :permissions, :actor_id, :created_timestamp, :expires_after_seconds)
+            (:secret_version, :description, :permissions, :actor_id, :created_timestamp, :expires_after_seconds)
         """,
             {
-                "secret_id": 0,
+                "secret_version": 0,
                 "permissions": json.dumps(permissions),
                 "description": post.get("description") or None,
                 "actor_id": request.actor["id"],

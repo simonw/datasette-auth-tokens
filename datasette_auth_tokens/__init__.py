@@ -2,18 +2,20 @@ from datasette import hookimpl
 import json
 import secrets
 import time
+from markupsafe import Markup
 from .views import create_api_token
 
 CREATE_TABLES_SQL = """
 CREATE TABLE _datasette_auth_tokens (
-   id INTEGER PRIMARY KEY,
-   secret_id INTEGER,
-   description TEXT,
-   permissions TEXT,
-   actor_id TEXT,
-   created_timestamp INTEGER,
-   last_used_timestamp INTEGER,
-   expires_after_seconds INTEGER
+    id INTEGER PRIMARY KEY,
+    token_status TEXT DEFAULT 'L', -- [L]ive, [R]evoked, [E]xpired
+    description TEXT,
+    actor_id TEXT,
+    permissions TEXT,
+    created_timestamp INTEGER,
+    last_used_timestamp INTEGER,
+    expires_after_seconds INTEGER,
+    secret_version INTEGER DEFAULT 0
 );
 """
 
@@ -37,7 +39,9 @@ def register_routes(datasette):
     config = _config(datasette)
     if not config.get("manage_tokens"):
         return
-    return [(r"^/-/api/tokens/create$", create_api_token)]
+    return [
+        (r"^/-/api/tokens/create$", create_api_token),
+    ]
 
 
 @hookimpl
@@ -130,3 +134,24 @@ async def _actor_from_managed(datasette, incoming_token):
         )
 
     return actor
+
+
+@hookimpl
+def render_cell(value, column, table, row):
+    if table != "_datasette_auth_tokens":
+        return None
+    if column.endswith("_timestamp"):
+        return value and time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(value))
+    if column != "token_status":
+        return None
+    return Markup(
+        ('<strong>{status}</strong><br><a href="/-/api/tokens/{id}">{link}</a>').format(
+            status={
+                "L": "Live",
+                "R": "Revoked",
+                "E": "Expired",
+            }.get(value, value),
+            id=row["id"],
+            link="edit / revoke" if value == "L" else "view",
+        )
+    )
