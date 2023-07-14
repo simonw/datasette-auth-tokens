@@ -1,4 +1,4 @@
-from datasette import hookimpl, Forbidden
+from datasette import hookimpl
 import json
 import secrets
 import time
@@ -139,7 +139,7 @@ async def _actor_from_managed(datasette, incoming_token):
             "update _datasette_auth_tokens set token_status='E' where id=:token_id",
             {"token_id": token_id},
         )
-        raise Forbidden("Token has expired")
+        return None
 
     # Update last_used_timestamp if more than 60 seconds old
     if row["last_used_timestamp"] is None or (
