@@ -1,4 +1,4 @@
-from datasette import hookimpl
+from datasette import hookimpl, Forbidden
 import json
 import secrets
 import time
@@ -117,12 +117,29 @@ async def _actor_from_managed(datasette, incoming_token):
     if not row:
         return None
 
-    # TODO: check expiry
-
     actor = {"id": row["actor_id"], "token": "dsatok"}
     permissions = json.loads(row["permissions"])
     if permissions:
         actor["_r"] = permissions
+
+    # Is token revoked?
+    if row["token_status"] == "R":
+        return None
+
+    # Expired?
+    if row["token_status"] == "E":
+        return None
+
+    # Also expire if it just hit expiry
+    if (
+        row["expires_after_seconds"]
+        and (row["created_timestamp"] + row["expires_after_seconds"]) < time.time()
+    ):
+        await db.execute_write(
+            "update _datasette_auth_tokens set token_status='E' where id=:token_id",
+            {"token_id": token_id},
+        )
+        raise Forbidden("Token has expired")
 
     # Update last_used_timestamp if more than 60 seconds old
     if row["last_used_timestamp"] is None or (
