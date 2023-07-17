@@ -29,7 +29,7 @@ setup(
     packages=["datasette_auth_tokens"],
     entry_points={"datasette": ["auth_tokens = datasette_auth_tokens"]},
     install_requires=[
-        "datasette>=0.44",
+        "datasette>=1.0a2",
         "sqlite-utils",
     ],
     extras_require={"test": ["pytest", "pytest-asyncio", "httpx", "sqlite-utils"]},
