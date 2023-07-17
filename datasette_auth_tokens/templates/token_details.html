@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}API token{% if token.description %}: {{ token.description }}{% endif %}{% endblock %}
+
+{% block extra_head %}
+<style type="text/css">
+dt {
+    font-weight: bold;
+}
+dd {
+    margin-left: 2em;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<h1>API token: {{ token.id }}</h1>
+
+<dl>
+    {% if token.description %}
+        <dt>Description</dt>
+        <dd>{{ token.description }}</dd>
+    {% endif %}
+    <dt>Token status</dt>
+    <dd>{{ token_status }}</dd>
+    <dt>Actor</dt>
+    <dd>{{ token.actor_id }}</dd>
+    <dt>Created</dt>
+    <dd>{{ timestamp(token.created_timestamp) }}</dd>
+    <dt>Last used</dt>
+    <dd>{{ timestamp(token.last_used_timestamp) }}</dd>
+    <dt>Restrictions</dt>
+    <dd><pre>{{ restrictions }}</pre></dd>
+</dl>
+
+{% if token_status == "Live" %}
+<form action="" method="POST">
+    <p>
+        <input type="hidden" name="csrftoken" value="{{ csrftoken() }}">
+        <input type="submit" name="revoke" value="Revoke token">
+    </p>
+</form>
+{% endif %}
+
+{% endblock %}

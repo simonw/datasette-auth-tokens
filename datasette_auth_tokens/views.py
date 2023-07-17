@@ -1,8 +1,9 @@
-from datasette import Forbidden, Response
+from datasette import Forbidden, Response, NotFound
 from datasette.utils import (
     tilde_encode,
     tilde_decode,
 )
+import datetime
 import json
 import time
 
@@ -159,3 +160,49 @@ async def _shared(datasette, request):
         ],
         "database_with_tables": database_with_tables,
     }
+
+
+async def tokens_index():
+    return Response.text("TODO")
+
+
+async def token_details(request, datasette):
+    from . import TOKEN_STATUSES
+
+    id = request.url_vars["id"]
+    db = datasette.get_database()
+    row = (
+        await db.execute("select * from _datasette_auth_tokens where id = ?", (id,))
+    ).first()
+    if row is None:
+        raise NotFound("Token not found")
+    if request.method == "POST":
+        post_vars = await request.post_vars()
+        if post_vars.get("revoke"):
+            await db.execute_write(
+                "update _datasette_auth_tokens set token_status = 'R' where id = ?",
+                (id,),
+            )
+        return Response.redirect(request.path)
+
+    restrictions = "None"
+    permissions = json.loads(row["permissions"])
+    if permissions:
+        restrictions = json.dumps(permissions, indent=2)
+
+    return Response.html(
+        await datasette.render_template(
+            "token_details.html",
+            {
+                "token": row,
+                "token_status": TOKEN_STATUSES.get(
+                    row["token_status"], row["token_status"]
+                ),
+                "timestamp": lambda ts: ts
+                and datetime.datetime.fromtimestamp(ts).isoformat()
+                or "None",
+                "restrictions": restrictions,
+            },
+            request=request,
+        )
+    )

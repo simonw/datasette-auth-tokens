@@ -3,7 +3,7 @@ import json
 import secrets
 import time
 from markupsafe import Markup
-from .views import create_api_token, check_permission
+from .views import create_api_token, check_permission, tokens_index, token_details
 
 CREATE_TABLES_SQL = """
 CREATE TABLE _datasette_auth_tokens (
@@ -19,6 +19,13 @@ CREATE TABLE _datasette_auth_tokens (
 );
 """
 
+TOKEN_STATUSES = {
+    "L": "Live",
+    "R": "Revoked",
+    "E": "Expired",
+}
+
+
 @hookimpl
 def table_actions(datasette, actor, database, table):
     if actor and table == "_datasette_auth_tokens":
@@ -28,12 +35,11 @@ def table_actions(datasette, actor, database, table):
             return
         return [
             {
-                "href": datasette.urls.path(
-                    "/-/api/tokens/create"
-                ),
+                "href": datasette.urls.path("/-/api/tokens/create"),
                 "label": "Create API token",
             }
         ]
+
 
 @hookimpl
 def startup(datasette):
@@ -56,6 +62,8 @@ def register_routes(datasette):
         return
     return [
         (r"^/-/api/tokens/create$", create_api_token),
+        (r"^/-/api/tokens$", tokens_index),
+        (r"^/-/api/tokens/(?P<id>\d+)$", token_details),
     ]
 
 
@@ -178,11 +186,7 @@ def render_cell(value, column, table, row):
         return None
     return Markup(
         ('<strong>{status}</strong><br><a href="/-/api/tokens/{id}">{link}</a>').format(
-            status={
-                "L": "Live",
-                "R": "Revoked",
-                "E": "Expired",
-            }.get(value, value),
+            status=TOKEN_STATUSES.get(value, value),
             id=row["id"],
             link="edit / revoke" if value == "L" else "view",
         )
