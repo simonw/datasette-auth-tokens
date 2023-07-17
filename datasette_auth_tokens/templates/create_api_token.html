@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block title %}Create an API token{% endblock %}
+
+{% block extra_head %}
+<style type="text/css">
+#restrict-permissions label {
+  display: inline;
+  width: 90%;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<h1>Create an API token</h1>
+
+<p>This token will allow API access with the same abilities as your current user, <strong>{{ request.actor.id }}</strong></p>
+
+{% if token %}
+  <div>
+    <h2>Your API token</h2>
+    <form>
+      <input type="text" class="copyable" style="width: 40%" value="{{ token }}">
+      <span class="copy-link-wrapper"></span>
+    </form>
+    <!--- show token in a <details> -->
+    <details style="margin-top: 1em">
+      <summary>Token details</summary>
+      <pre>{{ token_bits|tojson(4) }}</pre>
+    </details>
+  </div>
+  <h2>Create another token</h2>
+{% endif %}
+
+{% if errors %}
+  {% for error in errors %}
+    <p class="message-error">{{ error }}</p>
+  {% endfor %}
+{% endif %}
+
+<form action="{{ urls.path('-/api/tokens/create') }}" method="post">
+  <div>
+    <div style="margin-bottom: 0.5em">
+      <input type="text" name="description" placeholder="Optional token description" style="width: 40%">
+    </div>
+    <div class="select-wrapper" style="width: unset">
+      <select name="expire_type">
+        <option value="">Token never expires</option>
+        <option value="minutes">Expires after X minutes</option>
+        <option value="hours">Expires after X hours</option>
+        <option value="days">Expires after X days</option>
+      </select>
+    </div>
+    <input type="text" name="expire_duration" style="width: 10%">
+    <input type="hidden" name="csrftoken" value="{{ csrftoken() }}">
+    <input type="submit" value="Create token">
+
+    <p style="margin-top: 1em" id="token-summary"></p>
+
+    <h2>All databases and tables</h2>
+    <ul>
+      {% for permission in all_permissions %}
+        <li><label><input type="checkbox" name="all:{{ permission }}"> {{ permission }}</label></li>
+      {% endfor %}
+    </ul>
+
+    {% for database in database_with_tables %}
+      <h2>All tables in "{{ database.name }}"</h2>
+      <ul>
+        {% for permission in database_permissions %}
+          <li><label><input type="checkbox" name="database:{{ database.encoded }}:{{ permission }}"> {{ permission }}</label></li>
+        {% endfor %}
+      </ul>
+    {% endfor %}
+    <h2>Specific tables</h2>
+    {% for database in database_with_tables %}
+      {% for table in database.tables %}
+        <h3>{{ database.name }}: {{ table.name }}</h3>
+        <ul>
+          {% for permission in resource_permissions %}
+            <li><label><input type="checkbox" name="resource:{{ database.encoded }}:{{ table.encoded }}:{{ permission }}"> {{ permission }}</label></li>
+          {% endfor %}
+        </ul>
+      {% endfor %}
+    {% endfor %}
+
+</form>
+</div>
+
+<script>
+var expireDuration = document.querySelector('input[name="expire_duration"]');
+expireDuration.style.display = 'none';
+var expireType = document.querySelector('select[name="expire_type"]');
+function showHideExpireDuration() {
+  if (expireType.value) {
+    expireDuration.style.display = 'inline';
+    expireDuration.setAttribute("placeholder", expireType.value.replace("Expires after X ", ""));
+  } else {
+    expireDuration.style.display = 'none';
+  }
+}
+
+function updateTokenSummary() {
+  // Get all selected checkbox values on page
+  var allChecked = document.querySelectorAll('input[type="checkbox"]:checked');
+  var checkedValues = [];
+  for (var i = 0; i < allChecked.length; i++) {
+    checkedValues.push(humanPermission(allChecked[i].name));
+  }
+  var tokenSummary = document.querySelector('#token-summary');
+  if (checkedValues.length == 0) {
+    tokenSummary.innerHTML = 'Token will have all of the permissions of your current user';
+  } else {
+    // Build a <ul> of checkedValues
+    let html = ['<ul style="margin-top: 0.5em">'];
+    checkedValues.forEach(function(value) {
+      html.push('<li style="list-style-type: disc; margin-left: 1em;">' + value + '</li>');
+    });
+    html.push('</ul>');
+    tokenSummary.innerHTML = 'Token will be restricted to: ' + html.join('');
+  }
+}
+updateTokenSummary();
+
+function humanPermission(permission) {
+  // database:messages:view-database becomes "messages database: view-database"
+  // resource:messages:t2:view-table becomes "messages/t2 table: view-table"
+  var parts = permission.split(':');
+  var type = parts[0];
+  var db = parts[1];
+  var action = parts[parts.length - 1];
+  if (type == 'all') {
+    return 'all databases and tables: ' + action;
+  } else if (type == 'database') {
+    return db + ' database: ' + action;
+  } else if (type == 'resource') {
+    var table = parts[2];
+    return db + '/' + table + ' table: ' + action;
+  }
+}
+
+// On any input change on page, update token summary
+document.addEventListener('change', updateTokenSummary);
+
+showHideExpireDuration();
+expireType.addEventListener('change', showHideExpireDuration);
+var copyInput = document.querySelector(".copyable");
+if (copyInput) {
+  var wrapper = document.querySelector(".copy-link-wrapper");
+  var button = document.createElement("button");
+  button.className = "copyable-copy-button";
+  button.setAttribute("type", "button");
+  button.innerHTML = "Copy to clipboard";
+  button.onclick = (ev) => {
+    ev.preventDefault();
+    copyInput.select();
+    document.execCommand("copy");
+    button.innerHTML = "Copied!";
+    setTimeout(() => {
+        button.innerHTML = "Copy to clipboard";
+    }, 1500);
+  };
+  wrapper.appendChild(button);
+  wrapper.insertAdjacentElement("afterbegin", button);
+}
+</script>
+
+{% endblock %}

@@ -118,9 +118,34 @@ You can now run authenticated API queries like this:
     $ curl http://127.0.0.1:8001/:memory:/show_version.json?_shape=array&_auth_token=this-is-the-secret-token
     [{"sqlite_version()": "3.31.1"}]
 
-## Tokens from your database
+## Managed tokens mode
 
-As an alternative (or in addition) to the hard-coded list of tokens you can store tokens in a database table and configure the plugin to access them using a SQL query.
+`datasette-auth-tokens` provides a managed tokens mode, where tokens are stored in a SQLite database table and the plugin provides an interface for creating and revoking tokens.
+
+To turn this mode on, add `"manage_tokens": true` to your plugin configuration in `metadata.json`:
+
+```json
+{
+    "plugins": {
+        "datasette-auth-tokens": {
+            "manage_tokens": true
+        }
+    }
+}
+```
+This will add a "Create API token" option to the Datasette menu.
+
+Tokens that are created will be kept in a new `_datasette_auth_tokens` table.
+
+Navigating to that table page will provide the option to view and revoke tokens.
+
+When you create a new token a signed token string will be presented to you. You need to store this, as it is not stored directly in the database table and can only be retrieved once.
+
+## Custom tokens from your database
+
+If you decide not to use managed tokens mode, you can instead configure `datasette-auth-tokens` to use tokens that are stored in your own custom database tables.
+
+You can do this by configuring a custom SQL query that will execute to test if an incoming token is valid.
 
 Your query needs to take a `:token_id` parameter and return at least two columns: one called `token_secret` and one called `actor_*` - usually `actor_id`. Further `actor_` prefixed columns can be returned to provide more details for the authenticated actor.
 
@@ -169,7 +194,7 @@ To configure this, use a `"query"` block in your plugin configuration like this:
 ```
 The `"sql"` key here contains the SQL query. The `"database"` key has the name of the attached database file that the query should be executed against - in this case it would execute against `tokens.db`.
 
-### Securing your tokens
+### Securing your custom tokens
 
 Anyone with access to your Datasette instance can use it to read the `token_secret` column in your tokens table. This probably isn't what you want!
 
