@@ -1,9 +1,9 @@
-from datasette import hookimpl
+from datasette import hookimpl, Forbidden
 import json
 import secrets
 import time
 from markupsafe import Markup
-from .views import create_api_token
+from .views import create_api_token, check_permission
 
 CREATE_TABLES_SQL = """
 CREATE TABLE _datasette_auth_tokens (
@@ -19,6 +19,21 @@ CREATE TABLE _datasette_auth_tokens (
 );
 """
 
+@hookimpl
+def table_actions(datasette, actor, database, table):
+    if actor and table == "_datasette_auth_tokens":
+        try:
+            check_permission(datasette, actor)
+        except Forbidden:
+            return
+        return [
+            {
+                "href": datasette.urls.path(
+                    "/-/api/tokens/create"
+                ),
+                "label": "Create API token",
+            }
+        ]
 
 @hookimpl
 def startup(datasette):

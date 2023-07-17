@@ -8,7 +8,7 @@ import time
 
 
 async def create_api_token(request, datasette):
-    _check_permission(datasette, request)
+    check_permission(datasette, request.actor)
     if request.method == "GET":
         return Response.html(
             await datasette.render_template(
@@ -105,21 +105,21 @@ async def create_api_token(request, datasette):
         raise Forbidden("Invalid method")
 
 
-def _check_permission(datasette, request):
-    if not request.actor:
+def check_permission(datasette, actor):
+    if not actor:
         raise Forbidden("You must be logged in to create a token")
-    if not request.actor.get("id"):
+    if not actor.get("id"):
         raise Forbidden(
             "You must be logged in as an actor with an ID to create a token"
         )
-    if request.actor.get("token"):
+    if actor.get("token"):
         raise Forbidden(
             "Token authentication cannot be used to create additional tokens"
         )
 
 
 async def _shared(datasette, request):
-    _check_permission(datasette, request)
+    check_permission(datasette, request.actor)
     # Build list of databases and tables the user has permission to view
     database_with_tables = []
     for database in datasette.databases.values():
