@@ -29,16 +29,23 @@ TOKEN_STATUSES = {
 @hookimpl
 def table_actions(datasette, actor, database, table):
     if actor and table == "_datasette_auth_tokens":
-        try:
-            check_permission(datasette, actor)
-        except Forbidden:
-            return
-        return [
-            {
-                "href": datasette.urls.path("/-/api/tokens/create"),
-                "label": "Create API token",
-            }
-        ]
+        return menu_links(datasette, actor)
+
+
+@hookimpl
+def menu_links(datasette, actor):
+    if not actor:
+        return
+    try:
+        check_permission(datasette, actor)
+    except Forbidden:
+        return
+    return [
+        {
+            "href": datasette.urls.path("/-/api/tokens/create"),
+            "label": "Create API token",
+        }
+    ]
 
 
 @hookimpl
