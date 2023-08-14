@@ -141,6 +141,24 @@ Navigating to that table page will provide the option to view and revoke tokens.
 
 When you create a new token a signed token string will be presented to you. You need to store this, as it is not stored directly in the database table and can only be retrieved once.
 
+If you have multiple databases attached to Datasette you will need to specify which database should be used for the `_datasette_auth_tokens` table. You can do this with the `manage_tokens_database` setting:
+
+```json
+{
+    "plugins": {
+        "datasette-auth-tokens": {
+            "manage_tokens": true,
+            "manage_tokens_database": "tokens"
+        }
+    }
+}
+```
+Now start Datasette like this:
+```bash
+datasette -m metadata.json mydb.db tokens.db --create
+```
+The `--create` option can be used to tell Datasette to create the `tokens.db` database file if it does not already exist.
+
 ## Custom tokens from your database
 
 If you decide not to use managed tokens mode, you can instead configure `datasette-auth-tokens` to use tokens that are stored in your own custom database tables.

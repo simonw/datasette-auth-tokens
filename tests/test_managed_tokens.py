@@ -23,21 +23,48 @@ async def ds_managed(tmp_path_factory):
     )
 
 
+# Alternative database fixture
+@pytest_asyncio.fixture
+async def ds_managed_api_db(tmp_path_factory):
+    db_directory = tmp_path_factory.mktemp("dbs")
+    db_path = db_directory / "demo.db"
+    sqlite_utils.Database(db_path)["foo"].insert({"bar": 1})
+    api_db_path = db_directory / "api.db"
+    sqlite_utils.Database(api_db_path)["comment"].insert({"this-is-for-tokens": 1})
+    return Datasette(
+        [db_path, api_db_path],
+        metadata={
+            "plugins": {
+                "datasette-auth-tokens": {
+                    "manage_tokens": True,
+                    "param": "_auth_token",
+                    "manage_tokens_database": "api",
+                }
+            },
+        },
+    )
+
+
 @pytest.mark.parametrize("status", ("live", "revoked", "expired"))
+@pytest.mark.parametrize("database", (None, "api"))
 @pytest.mark.asyncio
-async def test_live_revoked_expired_tokens(ds_managed, status):
+async def test_live_revoked_expired_tokens(
+    ds_managed, ds_managed_api_db, status, database
+):
+    if database is not None:
+        ds_managed = ds_managed_api_db
     token_id, token = await _create_token(ds_managed)
-    expected_actor = {"id": "root", "token": "dsatok"}
+    expected_actor = {"id": "root", "token": "dsatok", "token_id": token_id}
     if status in ("revoked", "expired"):
         expected_actor = None
     if status == "revoked":
-        await ds_managed.get_database().execute_write(
+        await ds_managed.get_database(database).execute_write(
             "update _datasette_auth_tokens set token_status = 'R' where id=:id",
             {"id": token_id},
         )
     elif status == "expired":
         # Expire it by setting the created_timestamp and expires_after_seconds
-        await ds_managed.get_database().execute_write(
+        await ds_managed.get_database(database).execute_write(
             "update _datasette_auth_tokens set created_timestamp = :created, expires_after_seconds = 60 where id=:id",
             {"id": token_id, "created": time.time() - 120},
         )
@@ -80,9 +107,14 @@ async def _create_token(ds_managed):
         ),
     ],
 )
+@pytest.mark.parametrize("database", (None, "api"))
 @pytest.mark.asyncio
-async def test_create_token(ds_managed, post_fields, expected_actor):
+async def test_create_token(
+    ds_managed, ds_managed_api_db, post_fields, expected_actor, database
+):
     # TODO: switch to ds_managed.client.actor_cookie after next Datasette release
+    if database is not None:
+        ds_managed = ds_managed_api_db
     cookie = ds_managed.sign({"a": {"id": "root"}}, "actor")
     # Load initial create token page
     create_page = await ds_managed.client.get(
@@ -108,4 +140,7 @@ async def test_create_token(ds_managed, post_fields, expected_actor):
         "/-/actor.json", headers={"Authorization": "Bearer {}".format(api_token)}
     )
     assert response.status_code == 200
+    expected_actor["token_id"] = ds_managed.unsign(
+        api_token.split("dsatok_")[1], namespace="dsatok"
+    )
     assert response.json()["actor"] == expected_actor

@@ -76,7 +76,10 @@ async def create_api_token(request, datasette):
         )
         permissions = token_bits.get("_r") or None
 
-        db = datasette.get_database()
+        config = _config(datasette)
+        database = config.get("manage_tokens_database") or None
+
+        db = datasette.get_database(database)
         cursor = await db.execute_write(
             """
             insert into _datasette_auth_tokens
@@ -169,8 +172,11 @@ async def tokens_index():
 async def token_details(request, datasette):
     from . import TOKEN_STATUSES
 
+    config = _config(datasette)
+    database = config.get("manage_tokens_database") or None
+
     id = request.url_vars["id"]
-    db = datasette.get_database()
+    db = datasette.get_database(database)
     row = (
         await db.execute("select * from _datasette_auth_tokens where id = ?", (id,))
     ).first()
@@ -206,3 +212,7 @@ async def token_details(request, datasette):
             request=request,
         )
     )
+
+
+def _config(datasette):
+    return datasette.plugin_config("datasette-auth-tokens") or {}

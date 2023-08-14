@@ -3,7 +3,13 @@ import json
 import secrets
 import time
 from markupsafe import Markup
-from .views import create_api_token, check_permission, tokens_index, token_details
+from .views import (
+    create_api_token,
+    check_permission,
+    tokens_index,
+    token_details,
+    _config,
+)
 
 CREATE_TABLES_SQL = """
 CREATE TABLE _datasette_auth_tokens (
@@ -54,8 +60,10 @@ def startup(datasette):
     if not config.get("manage_tokens"):
         return
 
+    database = config.get("manage_tokens_database") or None
+
     async def inner():
-        db = datasette.get_database()
+        db = datasette.get_database(database)
         if "_datasette_auth_tokens" not in await db.table_names():
             await db.execute_write(CREATE_TABLES_SQL)
 
@@ -129,12 +137,10 @@ def actor_from_request(datasette, request):
     return inner
 
 
-def _config(datasette):
-    return datasette.plugin_config("datasette-auth-tokens") or {}
-
-
 async def _actor_from_managed(datasette, incoming_token):
-    db = datasette.get_database()
+    config = _config(datasette)
+    database = config.get("manage_tokens_database") or None
+    db = datasette.get_database(database)
     if not incoming_token.startswith("dsatok_"):
         return None
     incoming_token = incoming_token[len("dsatok_") :]
@@ -147,7 +153,11 @@ async def _actor_from_managed(datasette, incoming_token):
     if not row:
         return None
 
-    actor = {"id": row["actor_id"], "token": "dsatok"}
+    actor = {
+        "id": row["actor_id"],
+        "token": "dsatok",
+        "token_id": row["id"],
+    }
     permissions = json.loads(row["permissions"])
     if permissions:
         actor["_r"] = permissions
