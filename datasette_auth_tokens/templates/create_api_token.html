@@ -77,7 +77,7 @@ form div label {
         {% endfor %}
       </ul>
     {% endfor %}
-    <h2>Specific tables</h2>
+    <h2>Specific tables in specific databases</h2>
     {% for database in database_with_tables %}
       {% for table in database.tables %}
         <h3>{{ database.name }}: {{ table.name }}</h3>
