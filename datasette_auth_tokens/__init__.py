@@ -1,4 +1,5 @@
 from datasette import hookimpl, Forbidden
+import itsdangerous
 import json
 import secrets
 import time
@@ -144,7 +145,10 @@ async def _actor_from_managed(datasette, incoming_token):
     if not incoming_token.startswith("dsatok_"):
         return None
     incoming_token = incoming_token[len("dsatok_") :]
-    token_id = datasette.unsign(incoming_token, "dsatok")
+    try:
+        token_id = datasette.unsign(incoming_token, "dsatok")
+    except itsdangerous.BadSignature:
+        return None
     results = await db.execute(
         "select * from _datasette_auth_tokens where id=:token_id",
         {"token_id": token_id},

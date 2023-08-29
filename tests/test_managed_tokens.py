@@ -45,7 +45,7 @@ async def ds_managed_api_db(tmp_path_factory):
     )
 
 
-@pytest.mark.parametrize("status", ("live", "revoked", "expired"))
+@pytest.mark.parametrize("status", ("live", "revoked", "expired", "invalid"))
 @pytest.mark.parametrize("database", (None, "api"))
 @pytest.mark.asyncio
 async def test_live_revoked_expired_tokens(
@@ -68,6 +68,9 @@ async def test_live_revoked_expired_tokens(
             "update _datasette_auth_tokens set created_timestamp = :created, expires_after_seconds = 60 where id=:id",
             {"id": token_id, "created": time.time() - 120},
         )
+    elif status == "invalid":
+        token = "dsatok_bad-token"
+        expected_actor = None
     actor_response = await ds_managed.client.get(
         "/-/actor.json", headers={"Authorization": "Bearer {}".format(token)}
     )
