@@ -10,9 +10,9 @@ Datasette plugin for authenticating access using API tokens
 ## Installation
 
 Install this plugin in the same environment as Datasette.
-
-    $ pip install datasette-auth-tokens
-
+```bash
+datasette install datasette-auth-tokens
+```
 ## Hard-coded tokens
 
 Read about Datasette's [authentication and permissions system](https://datasette.readthedocs.io/en/latest/authentication.html).
@@ -20,10 +20,12 @@ Read about Datasette's [authentication and permissions system](https://datasette
 This plugin lets you configure secret API tokens which can be used to make authenticated requests to Datasette.
 
 First, create a random API token. A useful recipe for doing that is the following:
-
-    $ python -c 'import secrets; print(secrets.token_hex(32))'
-    5f9a486dd807de632200b17508c75002bb66ca6fde1993db1de6cbd446362589
-
+```bash
+python -c 'import secrets; print(secrets.token_hex(32))'
+```
+```
+5f9a486dd807de632200b17508c75002bb66ca6fde1993db1de6cbd446362589
+```
 Decide on the actor that this token should represent, for example:
 
 ```json
@@ -67,16 +69,18 @@ You can then use `"allow"` blocks to provide that token with permission to acces
 This uses Datasette's [secret configuration values mechanism](https://datasette.readthedocs.io/en/stable/plugins.html#secret-configuration-values) to allow the secret token to be passed as an environment variable.
 
 Run Datasette like this:
-
-    BOT_TOKEN="this-is-the-secret-token" \
-        datasette -m metadata.json
-
+```bash
+BOT_TOKEN="this-is-the-secret-token" \
+    datasette -m metadata.json
+```
 You can now run authenticated API queries like this:
-
-    $ curl -H 'Authorization: Bearer this-is-the-secret-token' \
-      'http://127.0.0.1:8001/:memory:/show_version.json?_shape=array'
-    [{"sqlite_version()": "3.31.1"}]
-
+```bash
+curl -H 'Authorization: Bearer this-is-the-secret-token' \
+  'http://127.0.0.1:8001/:memory:/show_version.json?_shape=array'
+```
+```json
+[{"sqlite_version()": "3.31.1"}]
+```
 Additionally you can allow passing the token as a query string parameter, although that's disabled by default given the security implications of URLs with secret tokens included. This may be useful to easily allow embedding data between different services.
 
 Simply enable it using the `param` config value:
@@ -114,10 +118,12 @@ Simply enable it using the `param` config value:
 ```
 
 You can now run authenticated API queries like this:
-
-    $ curl http://127.0.0.1:8001/:memory:/show_version.json?_shape=array&_auth_token=this-is-the-secret-token
-    [{"sqlite_version()": "3.31.1"}]
-
+```bash
+curl http://127.0.0.1:8001/:memory:/show_version.json?_shape=array&_auth_token=this-is-the-secret-token
+```
+```json
+[{"sqlite_version()": "3.31.1"}]
+```
 ## Managed tokens mode
 
 `datasette-auth-tokens` provides a managed tokens mode, where tokens are stored in a SQLite database table and the plugin provides an interface for creating and revoking tokens.
