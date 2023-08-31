@@ -19,6 +19,8 @@ form div label {
 
 <h1>Create an API token</h1>
 
+{% if tokens_exist %}<p><a href=".">Manage existing tokens</a></p>{% endif %}
+
 <p>This token will allow API access with the same abilities as your current user, <strong>{{ request.actor.username or request.actor.id }}</strong></p>
 
 {% if token %}

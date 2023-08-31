@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}API tokens{% endblock %}
+
+{% block content %}
+
+<h1>API tokens</h1>
+
+<p><a href="tokens/create">Create an API token</a></p>
+
+<table>
+{% for token in tokens %}
+<tr>
+  <td><a href="tokens/{{ token.id }}">{{ token.id }}</a></td>
+  <td>{{ token.status }}</td>
+</tr>
+{% endfor %}
+</table>
+
+Next: {{ next }}
+
+{% endblock %}

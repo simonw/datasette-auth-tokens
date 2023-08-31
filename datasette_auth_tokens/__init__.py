@@ -1,4 +1,4 @@
-from datasette import hookimpl, Forbidden
+from datasette import hookimpl, Forbidden, Permission
 import itsdangerous
 import json
 import secrets
@@ -9,7 +9,7 @@ from .views import (
     check_permission,
     tokens_index,
     token_details,
-    _config,
+    Config,
 )
 
 CREATE_TABLES_SQL = """
@@ -57,14 +57,13 @@ def menu_links(datasette, actor):
 
 @hookimpl
 def startup(datasette):
-    config = _config(datasette)
-    if not config.get("manage_tokens"):
+    config = Config(datasette)
+    if not config.enabled:
         return
 
-    database = config.get("manage_tokens_database") or None
+    db = config.db
 
     async def inner():
-        db = datasette.get_database(database)
         if "_datasette_auth_tokens" not in await db.table_names():
             await db.execute_write(CREATE_TABLES_SQL)
         else:
@@ -83,8 +82,8 @@ def startup(datasette):
 
 @hookimpl
 def register_routes(datasette):
-    config = _config(datasette)
-    if not config.get("manage_tokens"):
+    config = Config(datasette)
+    if not config.enabled:
         return
     return [
         (r"^/-/api/tokens/create$", create_api_token),
@@ -94,9 +93,23 @@ def register_routes(datasette):
 
 
 @hookimpl
+def register_permissions():
+    return [
+        Permission(
+            name="auth-tokens-revoke-any",
+            abbr=None,
+            description="Revoke any API tokens",
+            takes_database=False,
+            takes_resource=False,
+            default=False,
+        )
+    ]
+
+
+@hookimpl
 def actor_from_request(datasette, request):
     async def inner():
-        config = _config(datasette)
+        config = Config(datasette)
         allowed_tokens = config.get("tokens") or []
         query_param = config.get("param")
         authorization = request.headers.get("authorization")
@@ -113,7 +126,7 @@ def actor_from_request(datasette, request):
         else:
             return None
 
-        if config.get("manage_tokens"):
+        if config.enabled:
             return await _actor_from_managed(datasette, incoming_token)
 
         # First try hard-coded tokens in the list
@@ -149,9 +162,8 @@ def actor_from_request(datasette, request):
 
 
 async def _actor_from_managed(datasette, incoming_token):
-    config = _config(datasette)
-    database = config.get("manage_tokens_database") or None
-    db = datasette.get_database(database)
+    config = Config(datasette)
+    db = config.db
     if not incoming_token.startswith("dsatok_"):
         return None
     incoming_token = incoming_token[len("dsatok_") :]

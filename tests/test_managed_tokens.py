@@ -25,7 +25,7 @@ async def ds_managed(tmp_path_factory):
 
 # Alternative database fixture
 @pytest_asyncio.fixture
-async def ds_managed_api_db(tmp_path_factory):
+async def ds_api_db(tmp_path_factory):
     db_directory = tmp_path_factory.mktemp("dbs")
     db_path = db_directory / "demo.db"
     sqlite_utils.Database(db_path)["foo"].insert({"bar": 1})
@@ -48,23 +48,25 @@ async def ds_managed_api_db(tmp_path_factory):
 @pytest.mark.parametrize("status", ("active", "revoked", "expired", "invalid"))
 @pytest.mark.parametrize("database", (None, "api"))
 @pytest.mark.asyncio
-async def test_active_revoked_expired_tokens(
-    ds_managed, ds_managed_api_db, status, database
-):
+async def test_active_revoked_expired_tokens(ds_managed, ds_api_db, status, database):
     if database is not None:
-        ds_managed = ds_managed_api_db
+        ds_managed = ds_api_db
+        db = ds_managed.get_database(database)
+    else:
+        db = ds_managed.get_internal_database()
+
     token_id, token = await _create_token(ds_managed)
     expected_actor = {"id": "root", "token": "dsatok", "token_id": token_id}
     if status in ("revoked", "expired"):
         expected_actor = None
     if status == "revoked":
-        await ds_managed.get_database(database).execute_write(
+        await db.execute_write(
             "update _datasette_auth_tokens set token_status = 'R' where id=:id",
             {"id": token_id},
         )
     elif status == "expired":
         # Expire it by setting the created_timestamp and expires_after_seconds
-        await ds_managed.get_database(database).execute_write(
+        await db.execute_write(
             "update _datasette_auth_tokens set created_timestamp = :created, expires_after_seconds = 60 where id=:id",
             {"id": token_id, "created": time.time() - 120},
         )
@@ -113,11 +115,11 @@ async def _create_token(ds_managed):
 @pytest.mark.parametrize("database", (None, "api"))
 @pytest.mark.asyncio
 async def test_create_token(
-    ds_managed, ds_managed_api_db, post_fields, expected_actor, database
+    ds_managed, ds_api_db, post_fields, expected_actor, database
 ):
     # TODO: switch to ds_managed.client.actor_cookie after next Datasette release
     if database is not None:
-        ds_managed = ds_managed_api_db
+        ds_managed = ds_api_db
     cookie = ds_managed.sign({"a": {"id": "root"}}, "actor")
     # Load initial create token page
     create_page = await ds_managed.client.get(

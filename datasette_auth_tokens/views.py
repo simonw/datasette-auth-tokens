@@ -76,10 +76,8 @@ async def create_api_token(request, datasette):
         )
         permissions = token_bits.get("_r") or None
 
-        config = _config(datasette)
-        database = config.get("manage_tokens_database") or None
-
-        db = datasette.get_database(database)
+        config = Config(datasette)
+        db = config.db
         cursor = await db.execute_write(
             """
             insert into _datasette_auth_tokens
@@ -124,6 +122,11 @@ def check_permission(datasette, actor):
 
 async def _shared(datasette, request):
     check_permission(datasette, request.actor)
+    db = Config(datasette).db
+
+    tokens_exist = bool(
+        (await db.execute("select 1 from _datasette_auth_tokens limit 1")).first()
+    )
     # Build list of databases and tables the user has permission to view
     database_with_tables = []
     for database in datasette.databases.values():
@@ -162,33 +165,89 @@ async def _shared(datasette, request):
             key for key, value in datasette.permissions.items() if value.takes_resource
         ],
         "database_with_tables": database_with_tables,
+        "tokens_exist": tokens_exist,
     }
 
 
-async def tokens_index():
-    return Response.text("TODO")
+PAGE_SIZE = 3
+
+
+async def tokens_index(datasette, request):
+    from . import TOKEN_STATUSES
+
+    db = Config(datasette).db
+    tokens = [
+        dict(row)
+        for row in (
+            await db.execute(
+                "select * from _datasette_auth_tokens order by id desc limit {}".format(
+                    PAGE_SIZE + 1
+                )
+            )
+        ).rows
+    ]
+    next = None
+    if len(tokens) == PAGE_SIZE + 1:
+        next = tokens[-1]["id"]
+        tokens = tokens[:-1]
+
+    for token in tokens:
+        token["status"] = TOKEN_STATUSES.get(
+            token["token_status"], token["token_status"]
+        )
+
+    return Response.html(
+        await datasette.render_template(
+            "tokens_index.html",
+            {
+                "tokens": tokens,
+                "next": next,
+            },
+            request=request,
+        )
+    )
 
 
 async def token_details(request, datasette):
     from . import TOKEN_STATUSES
 
-    config = _config(datasette)
-    database = config.get("manage_tokens_database") or None
+    config = Config(datasette)
+    db = config.db
 
     id = request.url_vars["id"]
-    db = datasette.get_database(database)
-    row = (
-        await db.execute("select * from _datasette_auth_tokens where id = ?", (id,))
-    ).first()
+
+    async def fetch_row():
+        return (
+            await db.execute("select * from _datasette_auth_tokens where id = ?", (id,))
+        ).first()
+
+    row = await fetch_row()
     if row is None:
         raise NotFound("Token not found")
+
+    if (
+        row["expires_after_seconds"]
+        and (row["created_timestamp"] + row["expires_after_seconds"]) < time.time()
+    ):
+        await db.execute_write(
+            "update _datasette_auth_tokens set token_status='E' where id=:token_id",
+            {"token_id": id},
+        )
+        row = await fetch_row()
+
+    # User can revoke if they own the token or they have auth-tokens-revoke-any
+    can_revoke = await actor_can_revoke(datasette, request.actor, row["actor_id"])
+    print("can_revoke", can_revoke, "actor", request.actor, "row", row)
     if request.method == "POST":
         post_vars = await request.post_vars()
         if post_vars.get("revoke"):
-            await db.execute_write(
-                "update _datasette_auth_tokens set token_status = 'R' where id = ?",
-                (id,),
-            )
+            if not can_revoke:
+                raise Forbidden("You do not have permission to revoke this token")
+            else:
+                await db.execute_write(
+                    "update _datasette_auth_tokens set token_status = 'R' where id = ?",
+                    (id,),
+                )
         return Response.redirect(request.path)
 
     restrictions = "None"
@@ -208,11 +267,36 @@ async def token_details(request, datasette):
                 and datetime.datetime.fromtimestamp(ts).isoformat()
                 or "None",
                 "restrictions": restrictions,
+                "can_revoke": can_revoke,
             },
             request=request,
         )
     )
 
 
-def _config(datasette):
-    return datasette.plugin_config("datasette-auth-tokens") or {}
+async def actor_can_revoke(datasette, actor, token_actor_id):
+    if not actor.get("id"):
+        # Only works for actors that have an ID set
+        return False
+    if token_actor_id and str(token_actor_id) == str(actor.get("id")):
+        return True
+    # User with auth-tokens-revoke-any can revoke any token
+    return await datasette.permission_allowed(actor, "auth-tokens-revoke-any")
+
+
+class Config:
+    def __init__(self, datasette):
+        self._plugin_config = datasette.plugin_config("datasette-auth-tokens") or {}
+        self._datasette = datasette
+        self.enabled = self._plugin_config.get("manage_tokens")
+
+    def get(self, key):
+        return self._plugin_config.get(key)
+
+    @property
+    def db(self):
+        db_name = self._plugin_config.get("manage_tokens_database") or None
+        if db_name is None:
+            return self._datasette.get_internal_database()
+        else:
+            return self._datasette.get_database(db_name)

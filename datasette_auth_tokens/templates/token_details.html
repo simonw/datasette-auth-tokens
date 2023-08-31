@@ -16,7 +16,8 @@ dd {
 {% block content %}
 
 <h1>API token: {{ token.id }}</h1>
-
+<p><a href=".">List all tokens</a></p>
+{{ token }}
 <dl>
     {% if token.description %}
         <dt>Description</dt>
@@ -30,11 +31,13 @@ dd {
     <dd>{{ timestamp(token.created_timestamp) }}</dd>
     <dt>Last used</dt>
     <dd>{{ timestamp(token.last_used_timestamp) }}</dd>
+    {% if token.expires_after_seconds %}<dt>Expires at</dt>
+    <dd>{{ timestamp(token.created_timestamp + token.expires_after_seconds) }}</dd>{% endif %}
     <dt>Restrictions</dt>
     <dd><pre>{{ restrictions }}</pre></dd>
 </dl>
 
-{% if token_status == "Live" %}
+{% if token_status == "Active" and can_revoke %}
 <br>
 <form action="" method="POST">
     <p>
