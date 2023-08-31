@@ -160,7 +160,11 @@ async def _shared(datasette, request):
         )
     return {
         "actor": request.actor,
-        "all_permissions": datasette.permissions.keys(),
+        "all_permissions": [
+            key
+            for key in datasette.permissions.keys()
+            if key != "auth-tokens-revoke-any"
+        ],
         "database_permissions": [
             key for key, value in datasette.permissions.items() if value.takes_database
         ],

@@ -281,3 +281,12 @@ async def test_token_pagination(ds_managed):
             break
     assert len(set(collected)) == num_tokens
     assert pages > 1
+
+
+@pytest.mark.asyncio
+async def test_tokens_cannot_be_restricted_to_auth_tokens_revoke_any(ds_managed):
+    root_cookie = ds_managed.sign({"a": {"id": "root"}}, "actor")
+    create_page = await ds_managed.client.get(
+        "/-/api/tokens/create", cookies={"ds_actor": root_cookie}
+    )
+    assert "auth-tokens-revoke-any" not in create_page.text
