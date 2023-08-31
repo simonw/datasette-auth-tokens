@@ -31,6 +31,7 @@ setup(
     install_requires=[
         "datasette>=1.0a5",
         "sqlite-utils",
+        "sqlite-migrate",
     ],
     extras_require={"test": ["pytest", "pytest-asyncio", "httpx", "sqlite-utils"]},
     package_data={"datasette_auth_tokens": ["templates/*.html"]},

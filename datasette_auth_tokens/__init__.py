@@ -2,6 +2,7 @@ from datasette import hookimpl, Forbidden, Permission
 import itsdangerous
 import json
 import secrets
+import sqlite_utils
 import time
 from markupsafe import Markup
 from .views import (
@@ -11,20 +12,7 @@ from .views import (
     token_details,
     Config,
 )
-
-CREATE_TABLES_SQL = """
-CREATE TABLE _datasette_auth_tokens (
-    id INTEGER PRIMARY KEY,
-    token_status TEXT DEFAULT 'A', -- [A]ctive, [R]evoked, [E]xpired
-    description TEXT,
-    actor_id TEXT,
-    permissions TEXT,
-    created_timestamp INTEGER,
-    last_used_timestamp INTEGER,
-    expires_after_seconds INTEGER,
-    secret_version INTEGER DEFAULT 0
-);
-"""
+from .migrations import migration
 
 TOKEN_STATUSES = {
     "A": "Active",
@@ -64,18 +52,11 @@ def startup(datasette):
     db = config.db
 
     async def inner():
-        if "_datasette_auth_tokens" not in await db.table_names():
-            await db.execute_write(CREATE_TABLES_SQL)
-        else:
-            # Update any old 'L' tokens to 'A' - Live is now Active
-            # I'll remove this in a few versions
-            await db.execute_write(
-                """
-                update _datasette_auth_tokens
-                set token_status = 'A'
-                where token_status = 'L'
-                """
-            )
+        def migrate(conn):
+            db = sqlite_utils.Database(conn)
+            migration.apply(db)
+
+        await db.execute_write_fn(migrate)
 
     return inner
 
