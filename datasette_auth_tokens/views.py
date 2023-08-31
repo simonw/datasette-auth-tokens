@@ -251,8 +251,14 @@ async def token_details(request, datasette):
                 raise Forbidden("You do not have permission to revoke this token")
             else:
                 await db.execute_write(
-                    "update _datasette_auth_tokens set token_status = 'R' where id = ?",
-                    (id,),
+                    """
+                    update _datasette_auth_tokens
+                    set
+                        token_status = 'R',
+                        ended_timestamp = :now
+                    where id = :id
+                    """,
+                    {"id": id, "now": int(time.time())},
                 )
         return Response.redirect(request.path)
 

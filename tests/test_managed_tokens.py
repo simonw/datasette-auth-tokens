@@ -166,6 +166,16 @@ async def test_revoke_permissions(ds_managed, scenario, should_allow_revoke):
     # Create a token
     token_id, _ = await _create_token(ds_managed, "owner")
 
+    async def get_token(token_id):
+        return (
+            await ds_managed.get_internal_database().execute(
+                "select * from _datasette_auth_tokens where id=:id",
+                {"id": token_id},
+            )
+        ).first()
+
+    assert (await get_token(token_id))["ended_timestamp"] is None
+
     if scenario != "anonymous":
         cookies = {"ds_actor": ds_managed.sign({"a": {"id": scenario}}, "actor")}
     else:
@@ -200,12 +210,9 @@ async def test_revoke_permissions(ds_managed, scenario, should_allow_revoke):
     if should_allow_revoke:
         assert revoke_response.status_code == 302
         # Check token was revoked in the database
-        row = await ds_managed.get_internal_database().execute(
-            "select token_status from _datasette_auth_tokens where id=:id",
-            {"id": token_id},
-        )
-        token_status = row.first()["token_status"]
-        assert token_status == "R"
+        token = await get_token(token_id)
+        assert token["token_status"] == "R"
+        assert token["ended_timestamp"]
     else:
         assert revoke_response.status_code == 403
 
