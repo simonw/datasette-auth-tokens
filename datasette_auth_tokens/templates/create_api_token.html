@@ -28,6 +28,7 @@ form div label {
       <input type="text" class="copyable" style="width: 40%" value="{{ token }}">
       <span class="copy-link-wrapper"></span>
     </form>
+    <p class="message-warning">For security reasons this token will only appear here once. <strong>Copy it somewhere safe</strong>.</p>
     <!--- show token in a <details> -->
     <details style="margin-top: 1em">
       <summary>Token details</summary>
@@ -77,6 +78,7 @@ form div label {
         {% endfor %}
       </ul>
     {% endfor %}
+    {% if database_with_tables %}
     <h2>Specific tables in specific databases</h2>
     {% for database in database_with_tables %}
       {% for table in database.tables %}
@@ -88,7 +90,7 @@ form div label {
         </ul>
       {% endfor %}
     {% endfor %}
-
+    {% endif %}
 </form>
 </div>
 
