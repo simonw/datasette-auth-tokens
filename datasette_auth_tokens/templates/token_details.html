@@ -35,10 +35,11 @@ dd {
 </dl>
 
 {% if token_status == "Live" %}
+<br>
 <form action="" method="POST">
     <p>
         <input type="hidden" name="csrftoken" value="{{ csrftoken() }}">
-        <input type="submit" name="revoke" value="Revoke token">
+        <input type="submit" name="revoke" value="Revoke this token">
     </p>
 </form>
 {% endif %}
