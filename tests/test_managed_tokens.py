@@ -45,10 +45,10 @@ async def ds_managed_api_db(tmp_path_factory):
     )
 
 
-@pytest.mark.parametrize("status", ("live", "revoked", "expired", "invalid"))
+@pytest.mark.parametrize("status", ("active", "revoked", "expired", "invalid"))
 @pytest.mark.parametrize("database", (None, "api"))
 @pytest.mark.asyncio
-async def test_live_revoked_expired_tokens(
+async def test_active_revoked_expired_tokens(
     ds_managed, ds_managed_api_db, status, database
 ):
     if database is not None:

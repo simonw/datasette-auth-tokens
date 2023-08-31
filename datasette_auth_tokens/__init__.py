@@ -15,7 +15,7 @@ from .views import (
 CREATE_TABLES_SQL = """
 CREATE TABLE _datasette_auth_tokens (
     id INTEGER PRIMARY KEY,
-    token_status TEXT DEFAULT 'L', -- [L]ive, [R]evoked, [E]xpired
+    token_status TEXT DEFAULT 'A', -- [A]ctive, [R]evoked, [E]xpired
     description TEXT,
     actor_id TEXT,
     permissions TEXT,
@@ -27,7 +27,7 @@ CREATE TABLE _datasette_auth_tokens (
 """
 
 TOKEN_STATUSES = {
-    "L": "Live",
+    "A": "Active",
     "R": "Revoked",
     "E": "Expired",
 }
@@ -67,6 +67,16 @@ def startup(datasette):
         db = datasette.get_database(database)
         if "_datasette_auth_tokens" not in await db.table_names():
             await db.execute_write(CREATE_TABLES_SQL)
+        else:
+            # Update any old 'L' tokens to 'A' - Live is now Active
+            # I'll remove this in a few versions
+            await db.execute_write(
+                """
+                update _datasette_auth_tokens
+                set token_status = 'A'
+                where token_status = 'L'
+                """
+            )
 
     return inner
 
