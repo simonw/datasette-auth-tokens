@@ -29,7 +29,7 @@ tr.token-E {
 <tr>
   <th>Token</th>
   <th>Actor</th>
-  <th>Status</th>
+  <th>Restrictions</th>
   <th>Created</th>
   <th>Last used</th>
   <th>Expires at</th>
@@ -39,7 +39,7 @@ tr.token-E {
 <tr class="token-{{ token.token_status }}">
   <td><a href="tokens/{{ token.id }}">{{ token.id }}&nbsp;-&nbsp;{{ token.status }}</a>{% if token.description %}<br><span class="detail">{{ token.description }}</span>{% endif %}</td>
   <td>{{ token.actor_id }}</td>
-  <td>{{ token.status }}</td>
+  <td>{{ format_permissions(token.permissions) }}</td>
   <td>{{ timestamp(token.created_timestamp) }}<br><span class="detail">{{ ago_difference(token.created_timestamp) }}</span></td>
   <td>{{ timestamp(token.last_used_timestamp) }}<br><span class="detail">{{ ago_difference(token.last_used_timestamp) }}</span></td>
   <td>{% if token.expires_after_seconds %}{{ timestamp(token.created_timestamp + token.expires_after_seconds) }}<br><span class="detail">{{ ago_difference(token.created_timestamp + token.expires_after_seconds) }}{% endif %}</td>

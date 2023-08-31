@@ -3,7 +3,7 @@ from datasette.utils import (
     tilde_encode,
     tilde_decode,
 )
-from .utils import ago_difference
+from .utils import ago_difference, format_permissions
 import datetime
 import json
 import time
@@ -207,6 +207,9 @@ async def tokens_index(datasette, request):
             token["token_status"], token["token_status"]
         )
 
+    def _format_permissions(json_string):
+        return format_permissions(datasette, json.loads(json_string))
+
     return Response.html(
         await datasette.render_template(
             "tokens_index.html",
@@ -216,6 +219,7 @@ async def tokens_index(datasette, request):
                 "is_first_page": not bool(request.args.get("next")),
                 "timestamp": _timestamp,
                 "ago_difference": ago_difference,
+                "format_permissions": _format_permissions,
             },
             request=request,
         )
@@ -275,7 +279,7 @@ async def token_details(request, datasette):
     restrictions = "None"
     permissions = json.loads(row["permissions"])
     if permissions:
-        restrictions = json.dumps(permissions, indent=2)
+        restrictions = format_permissions(datasette, permissions)
 
     return Response.html(
         await datasette.render_template(

@@ -42,3 +42,37 @@ def ago_difference(time1: int, time2: Optional[int] = None):
         return "In {}".format(combined)
     else:
         return "{} ago".format(combined)
+
+
+def format_permissions(datasette, permissions_dict):
+    if not permissions_dict:
+        return "All permissions"
+    abbreviations = {}
+    for permission in datasette.permissions.values():
+        if permission.abbr:
+            abbreviations[permission.abbr] = permission.name
+
+    output = []
+
+    # Format permissions for all databases
+    if "a" in permissions_dict:
+        output.append("All databases:")
+        for code in permissions_dict["a"]:
+            output.append(f"- {abbreviations.get(code, code)}")
+
+    # Format permissions for specific databases
+    if "d" in permissions_dict:
+        for db, codes in permissions_dict["d"].items():
+            output.append(f"Database: {db}")
+            for code in codes:
+                output.append(f"- {abbreviations.get(code, code)}")
+
+    # Format permissions for specific tables in specific databases
+    if "r" in permissions_dict:
+        for db, tables in permissions_dict["r"].items():
+            for table, codes in tables.items():
+                output.append(f"Table: {db}/{table}")
+                for code in codes:
+                    output.append(f"- {abbreviations.get(code, code)}")
+
+    return "\n".join(output)
