@@ -152,6 +152,10 @@ async def _actor_from_managed(datasette, incoming_token):
         token_id = datasette.unsign(incoming_token, "dsatok")
     except itsdangerous.BadSignature:
         return None
+
+    # Potentially expire token first
+    await db.execute_write_fn(make_expire_function(token_id))
+
     results = await db.execute(
         "select * from _datasette_auth_tokens where id=:token_id",
         {"token_id": token_id},
@@ -177,17 +181,6 @@ async def _actor_from_managed(datasette, incoming_token):
     if row["token_status"] == "E":
         return None
 
-    # Also expire if it just hit expiry
-    if (
-        row["expires_after_seconds"]
-        and (row["created_timestamp"] + row["expires_after_seconds"]) < time.time()
-    ):
-        await db.execute_write(
-            "update _datasette_auth_tokens set token_status='E' where id=:token_id",
-            {"token_id": token_id},
-        )
-        return None
-
     # Update last_used_timestamp if more than 60 seconds old
     if row["last_used_timestamp"] is None or (
         row["last_used_timestamp"] < (time.time() - 60)
@@ -198,6 +191,32 @@ async def _actor_from_managed(datasette, incoming_token):
         )
 
     return actor
+
+
+def make_expire_function(token_id=None):
+    where_bits = [
+        "token_status = 'A'",
+        "expires_after_seconds is not null",
+        "(created_timestamp + expires_after_seconds) < :now",
+    ]
+    if token_id:
+        where_bits.append("id = :token_id")
+
+    def expire_tokens(conn):
+        # Expire all tokens that are due to expire - or just specified token
+        conn.execute(
+            """
+            update _datasette_auth_tokens
+            set token_status = 'E', ended_timestamp = :now
+            where {where}
+        """.format(
+                where=" and ".join(where_bits)
+            ),
+            {"now": int(time.time()), "token_id": token_id},
+        )
+        conn.commit()
+
+    return expire_tokens
 
 
 @hookimpl

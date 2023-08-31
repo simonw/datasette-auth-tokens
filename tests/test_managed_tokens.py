@@ -208,3 +208,34 @@ async def test_revoke_permissions(ds_managed, scenario, should_allow_revoke):
         assert token_status == "R"
     else:
         assert revoke_response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_viewing_tokens_expires_some(ds_managed):
+    # Viewing the /-/api/tokens page should expire any tokens that need it
+    db = ds_managed.get_internal_database()
+    token_id, _ = await _create_token(ds_managed)
+    await db.execute_write(
+        "update _datasette_auth_tokens set created_timestamp = :created, expires_after_seconds = 60 where id=:id",
+        {"id": token_id, "created": time.time() - 120},
+    )
+
+    async def get_token():
+        return (
+            await db.execute(
+                "select * from _datasette_auth_tokens where id=:token_id",
+                {"token_id": token_id},
+            )
+        ).first()
+
+    token = await get_token()
+    assert token["token_status"] == "A"
+
+    # Viewing the list of tokens should expire it
+    response = await ds_managed.client.get(
+        "/-/api/tokens",
+        cookies={"ds_actor": ds_managed.sign({"a": {"id": "admin"}}, "actor")},
+    )
+    assert response.status_code == 200
+    token = await get_token()
+    assert token["token_status"] == "E"

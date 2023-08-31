@@ -173,9 +173,13 @@ PAGE_SIZE = 3
 
 
 async def tokens_index(datasette, request):
-    from . import TOKEN_STATUSES
+    from . import TOKEN_STATUSES, make_expire_function
 
     db = Config(datasette).db
+
+    # Expire any tokens that are due for expiring
+    await db.execute_write_fn(make_expire_function())
+
     tokens = [
         dict(row)
         for row in (
