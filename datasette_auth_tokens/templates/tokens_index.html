@@ -2,6 +2,23 @@
 
 {% block title %}API tokens{% endblock %}
 
+{% block extra_head %}
+<style>
+span.detail {
+    color: #999;
+    font-size: 0.8em;
+}
+tr.token-R {
+  /* Revoked */
+  background-color: rgb(249, 186, 186);
+}
+tr.token-E {
+  /* Expired */
+  background-color: rgb(253, 255, 221);
+}
+</style>
+{% endblock %}
+
 {% block content %}
 
 <h1>API tokens</h1>
@@ -9,14 +26,33 @@
 <p><a href="tokens/create">Create an API token</a></p>
 
 <table>
-{% for token in tokens %}
 <tr>
-  <td><a href="tokens/{{ token.id }}">{{ token.id }}</a></td>
+  <th>Token</th>
+  <th>Actor</th>
+  <th>Status</th>
+  <th>Created</th>
+  <th>Last used</th>
+  <th>Expires at</th>
+  <th>Ended</th>
+</tr>
+{% for token in tokens %}
+<tr class="token-{{ token.token_status }}">
+  <td><a href="tokens/{{ token.id }}">{{ token.id }}&nbsp;-&nbsp;{{ token.status }}</a>{% if token.description %}<br><span class="detail">{{ token.description }}</span>{% endif %}</td>
+  <td>{{ token.actor_id }}</td>
   <td>{{ token.status }}</td>
+  <td>{{ timestamp(token.created_timestamp) }}<br><span class="detail">{{ ago_difference(token.created_timestamp) }}</span></td>
+  <td>{{ timestamp(token.last_used_timestamp) }}<br><span class="detail">{{ ago_difference(token.last_used_timestamp) }}</span></td>
+  <td>{% if token.expires_after_seconds %}{{ timestamp(token.created_timestamp + token.expires_after_seconds) }}<br><span class="detail">{{ ago_difference(token.created_timestamp + token.expires_after_seconds) }}{% endif %}</td>
+  <td>{{ timestamp(token.ended_timestamp) }}<br><span class="detail">{{ ago_difference(token.ended_timestamp) }}</span></td>
 </tr>
 {% endfor %}
 </table>
 
-Next: {{ next }}
+{% if next %}
+<p style="margin-top: 1em"><a href="?next={{ next }}">Next page</a></p>
+{% endif %}
+{% if not is_first_page %}
+<p style="margin-top: 1em"><a href="{{ request.path }}">First page</a></p>
+{% endif %}
 
 {% endblock %}

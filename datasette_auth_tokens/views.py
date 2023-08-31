@@ -3,9 +3,12 @@ from datasette.utils import (
     tilde_encode,
     tilde_decode,
 )
+from .utils import ago_difference
 import datetime
 import json
 import time
+
+TOKEN_PAGE_SIZE = 30
 
 
 async def create_api_token(request, datasette):
@@ -169,9 +172,6 @@ async def _shared(datasette, request):
     }
 
 
-PAGE_SIZE = 3
-
-
 async def tokens_index(datasette, request):
     from . import TOKEN_STATUSES, make_expire_function
 
@@ -180,18 +180,25 @@ async def tokens_index(datasette, request):
     # Expire any tokens that are due for expiring
     await db.execute_write_fn(make_expire_function())
 
+    next = request.args.get("next")
+
     tokens = [
         dict(row)
         for row in (
             await db.execute(
-                "select * from _datasette_auth_tokens order by id desc limit {}".format(
-                    PAGE_SIZE + 1
-                )
+                """
+                select * from _datasette_auth_tokens
+                {where} order by id desc limit {limit}
+            """.format(
+                    where=" where id <= :next" if next else "",
+                    limit=TOKEN_PAGE_SIZE + 1,
+                ),
+                {"next": next} if next else {},
             )
         ).rows
     ]
     next = None
-    if len(tokens) == PAGE_SIZE + 1:
+    if len(tokens) == TOKEN_PAGE_SIZE + 1:
         next = tokens[-1]["id"]
         tokens = tokens[:-1]
 
@@ -206,6 +213,9 @@ async def tokens_index(datasette, request):
             {
                 "tokens": tokens,
                 "next": next,
+                "is_first_page": not bool(request.args.get("next")),
+                "timestamp": _timestamp,
+                "ago_difference": ago_difference,
             },
             request=request,
         )
@@ -275,14 +285,20 @@ async def token_details(request, datasette):
                 "token_status": TOKEN_STATUSES.get(
                     row["token_status"], row["token_status"]
                 ),
-                "timestamp": lambda ts: ts
-                and datetime.datetime.fromtimestamp(ts).isoformat()
-                or "None",
+                "timestamp": _timestamp,
+                "ago_difference": ago_difference,
                 "restrictions": restrictions,
             },
             request=request,
         )
     )
+
+
+def _timestamp(ts):
+    if ts:
+        return datetime.datetime.fromtimestamp(ts).isoformat()
+    else:
+        return ""
 
 
 async def actor_can_manage(datasette, actor, token_actor_id):

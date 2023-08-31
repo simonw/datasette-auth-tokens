@@ -17,7 +17,6 @@ dd {
 
 <h1>API token: {{ token.id }}</h1>
 <p><a href=".">List all tokens</a></p>
-{{ token }}
 <dl>
     {% if token.description %}
         <dt>Description</dt>
@@ -28,9 +27,9 @@ dd {
     <dt>Actor</dt>
     <dd>{{ token.actor_id }}</dd>
     <dt>Created</dt>
-    <dd>{{ timestamp(token.created_timestamp) }}</dd>
+    <dd>{{ timestamp(token.created_timestamp) or "None" }}</dd>
     <dt>Last used</dt>
-    <dd>{{ timestamp(token.last_used_timestamp) }}</dd>
+    <dd>{{ timestamp(token.last_used_timestamp) or "None" }}</dd>
     {% if token.expires_after_seconds %}<dt>Expires at</dt>
     <dd>{{ timestamp(token.created_timestamp + token.expires_after_seconds) }}</dd>{% endif %}
     <dt>Restrictions</dt>

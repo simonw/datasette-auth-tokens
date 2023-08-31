@@ -246,3 +246,38 @@ async def test_viewing_tokens_expires_some(ds_managed):
     assert response.status_code == 200
     token = await get_token()
     assert token["token_status"] == "E"
+
+
+@pytest.mark.asyncio
+async def test_token_pagination(ds_managed):
+    num_tokens = 100
+    for i in range(num_tokens):
+        await _create_token(ds_managed)
+    cookies = {"ds_actor": ds_managed.sign({"a": {"id": "admin"}}, "actor")}
+    collected = []
+    next_ = None
+    pages = 0
+    while True:
+        path = "/-/api/tokens"
+        if next_:
+            path += "?next={}".format(next_)
+        response = await ds_managed.client.get(path, cookies=cookies)
+        pages += 1
+        assert response.status_code == 200
+        bits = response.text.split('<td><a href="tokens/')
+        new_token_ids = []
+        for bit in bits[1:]:
+            token_id = bit.split('">')[0]
+            new_token_ids.append(token_id)
+        if '<a href="?next=' in response.text:
+            next_ = response.text.split('<a href="?next=')[1].split('">')[0]
+        else:
+            next_ = None
+        # Protect against infinite loops
+        if any(id in collected for id in new_token_ids):
+            assert False, "Infinite loop detected"
+        collected.extend(new_token_ids)
+        if next_ is None:
+            break
+    assert len(set(collected)) == num_tokens
+    assert pages > 1
