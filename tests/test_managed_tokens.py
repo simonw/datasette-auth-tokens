@@ -19,6 +19,7 @@ async def ds_managed(tmp_path_factory):
                     "param": "_auth_token",
                 }
             },
+            "permissions": {"auth-tokens-revoke-any": {"id": "admin"}},
         },
     )
 
@@ -80,8 +81,8 @@ async def test_active_revoked_expired_tokens(ds_managed, ds_api_db, status, data
     assert actor_response.json() == {"actor": expected_actor}
 
 
-async def _create_token(ds_managed):
-    root_cookie = ds_managed.sign({"a": {"id": "root"}}, "actor")
+async def _create_token(ds_managed, actor_id="root"):
+    root_cookie = ds_managed.sign({"a": {"id": actor_id}}, "actor")
     create_page = await ds_managed.client.get(
         "/-/api/tokens/create", cookies={"ds_actor": root_cookie}
     )
@@ -149,3 +150,61 @@ async def test_create_token(
         api_token.split("dsatok_")[1], namespace="dsatok"
     )
     assert response.json()["actor"] == expected_actor
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "scenario,should_allow_revoke",
+    (
+        ("owner", True),
+        ("admin", True),
+        ("other-user", False),
+        ("anonymous", False),
+    ),
+)
+async def test_revoke_permissions(ds_managed, scenario, should_allow_revoke):
+    # Create a token
+    token_id, _ = await _create_token(ds_managed, "owner")
+
+    if scenario != "anonymous":
+        cookies = {"ds_actor": ds_managed.sign({"a": {"id": scenario}}, "actor")}
+    else:
+        cookies = {}
+
+    # Get the token details page
+    response = await ds_managed.client.get(
+        "/-/api/tokens/{}".format(token_id), cookies=cookies
+    )
+
+    csrftoken = "-"
+
+    if not should_allow_revoke:
+        assert response.status_code == 403
+    else:
+        assert response.status_code == 200
+        csrftoken = response.cookies["ds_csrftoken"]
+        cookies["ds_csrftoken"] = csrftoken
+        # Is the revoke button present?
+        if scenario in ("owner", "admin"):
+            assert 'name="revoke"' in response.text
+        else:
+            assert 'name="revoke"' not in response.text
+
+    # Now try to revoke it
+    revoke_response = await ds_managed.client.post(
+        "/-/api/tokens/{}".format(token_id),
+        data={"revoke": "1", "csrftoken": csrftoken},
+        cookies=cookies,
+    )
+
+    if should_allow_revoke:
+        assert revoke_response.status_code == 302
+        # Check token was revoked in the database
+        row = await ds_managed.get_internal_database().execute(
+            "select token_status from _datasette_auth_tokens where id=:id",
+            {"id": token_id},
+        )
+        token_status = row.first()["token_status"]
+        assert token_status == "R"
+    else:
+        assert revoke_response.status_code == 403

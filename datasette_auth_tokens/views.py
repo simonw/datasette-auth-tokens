@@ -225,6 +225,11 @@ async def token_details(request, datasette):
     if row is None:
         raise NotFound("Token not found")
 
+    # User can manage if they own the token or they have auth-tokens-revoke-any
+    can_manage = await actor_can_manage(datasette, request.actor, row["actor_id"])
+    if not can_manage:
+        raise Forbidden("You do not have permission to manage this token")
+
     if (
         row["expires_after_seconds"]
         and (row["created_timestamp"] + row["expires_after_seconds"]) < time.time()
@@ -235,13 +240,10 @@ async def token_details(request, datasette):
         )
         row = await fetch_row()
 
-    # User can revoke if they own the token or they have auth-tokens-revoke-any
-    can_revoke = await actor_can_revoke(datasette, request.actor, row["actor_id"])
-    print("can_revoke", can_revoke, "actor", request.actor, "row", row)
     if request.method == "POST":
         post_vars = await request.post_vars()
         if post_vars.get("revoke"):
-            if not can_revoke:
+            if not can_manage:
                 raise Forbidden("You do not have permission to revoke this token")
             else:
                 await db.execute_write(
@@ -267,15 +269,14 @@ async def token_details(request, datasette):
                 and datetime.datetime.fromtimestamp(ts).isoformat()
                 or "None",
                 "restrictions": restrictions,
-                "can_revoke": can_revoke,
             },
             request=request,
         )
     )
 
 
-async def actor_can_revoke(datasette, actor, token_actor_id):
-    if not actor.get("id"):
+async def actor_can_manage(datasette, actor, token_actor_id):
+    if not actor or not actor.get("id"):
         # Only works for actors that have an ID set
         return False
     if token_actor_id and str(token_actor_id) == str(actor.get("id")):
