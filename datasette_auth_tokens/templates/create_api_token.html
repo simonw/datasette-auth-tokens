@@ -68,7 +68,7 @@ form div label {
     <h2>All databases and tables</h2>
     <ul>
       {% for permission in all_permissions %}
-        <li><label><input type="checkbox" name="all:{{ permission }}"> {{ permission }}</label></li>
+        <li><label><input type="checkbox" name="all:{{ permission.name }}"> {{ permission.name }}</label> - {{ permission.description }}</li>
       {% endfor %}
     </ul>
 
@@ -76,7 +76,7 @@ form div label {
       <h2>All tables in "{{ database.name }}"</h2>
       <ul>
         {% for permission in database_permissions %}
-          <li><label><input type="checkbox" name="database:{{ database.encoded }}:{{ permission }}"> {{ permission }}</label></li>
+          <li><label><input type="checkbox" name="database:{{ database.encoded }}:{{ permission.name }}"> {{ permission.name }}</label> - {{ permission.description }}</li>
         {% endfor %}
       </ul>
     {% endfor %}
@@ -87,7 +87,7 @@ form div label {
         <h3>{{ database.name }}: {{ table.name }}</h3>
         <ul>
           {% for permission in resource_permissions %}
-            <li><label><input type="checkbox" name="resource:{{ database.encoded }}:{{ table.encoded }}:{{ permission }}"> {{ permission }}</label></li>
+            <li><label><input type="checkbox" name="resource:{{ database.encoded }}:{{ table.encoded }}:{{ permission.name }}"> {{ permission.name }}</label> - {{ permission.description }}</li>
           {% endfor %}
         </ul>
       {% endfor %}
