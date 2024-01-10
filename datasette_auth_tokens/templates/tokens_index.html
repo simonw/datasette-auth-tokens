@@ -38,7 +38,7 @@ tr.token-E {
 {% for token in tokens %}
 <tr class="token-{{ token.token_status }}">
   <td><a href="tokens/{{ token.id }}">{{ token.id }}&nbsp;-&nbsp;{{ token.status }}</a>{% if token.description %}<br><span class="detail">{{ token.description }}</span>{% endif %}</td>
-  <td>{{ token.actor_id }}</td>
+  <td>{% if token.actor_display %}{{ token.actor_display }} ({{ token.actor_id }}){% else %}{{ token.actor_id }}{% endif %}</td>
   <td>{{ format_permissions(token.permissions) }}</td>
   <td>{{ timestamp(token.created_timestamp) }}<br><span class="detail">{{ ago_difference(token.created_timestamp) }}</span></td>
   <td>{{ timestamp(token.last_used_timestamp) }}<br><span class="detail">{{ ago_difference(token.last_used_timestamp) }}</span></td>

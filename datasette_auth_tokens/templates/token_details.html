@@ -25,7 +25,7 @@ dd {
     <dt>Token status</dt>
     <dd>{{ token_status }}</dd>
     <dt>Actor</dt>
-    <dd>{{ token.actor_id }}</dd>
+    <dd>{% if actor_display %}{{ actor_display }} ({{ token.actor_id }}){% else %}{{ token.actor_id }}{% endif %}</dd>
     <dt>Created</dt>
     <dd>{{ timestamp(token.created_timestamp) or "None" }}</dd>
     <dt>Last used</dt>

@@ -2,6 +2,7 @@ from datasette import Forbidden, Response, NotFound
 from datasette.utils import (
     tilde_encode,
     tilde_decode,
+    display_actor,
 )
 from .utils import ago_difference, format_permissions
 import datetime
@@ -215,6 +216,14 @@ async def tokens_index(datasette, request):
             token["token_status"], token["token_status"]
         )
 
+    # Resolve actors
+    actor_ids = set([token["actor_id"] for token in tokens])
+    actors = await datasette.actors_from_ids(list(actor_ids))
+    for token in tokens:
+        actor = actors.get(token["actor_id"])
+        token["actor"] = actor
+        token["actor_display"] = display_actor(actor)
+
     def _format_permissions(json_string):
         return format_permissions(datasette, json.loads(json_string))
 
@@ -289,11 +298,17 @@ async def token_details(request, datasette):
     if permissions:
         restrictions = format_permissions(datasette, permissions)
 
+    actors = await datasette.actors_from_ids([row["actor_id"]])
+    actor_display = None
+    if actors and row["actor_id"] in actors:
+        actor_display = display_actor(actors[row["actor_id"]])
+
     return Response.html(
         await datasette.render_template(
             "token_details.html",
             {
                 "token": row,
+                "actor_display": actor_display,
                 "token_status": TOKEN_STATUSES.get(
                     row["token_status"], row["token_status"]
                 ),

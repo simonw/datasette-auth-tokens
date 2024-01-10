@@ -1,8 +1,30 @@
 from datasette.app import Datasette
+from datasette.plugins import pm
+from datasette import hookimpl
 import pytest
 import pytest_asyncio
 import sqlite_utils
 import time
+
+
+class TestActorsPlugin:
+    __name__ = "TestActorsPlugin"
+
+    @hookimpl
+    def actors_from_ids(self, actor_ids):
+        return {
+            "root": {
+                "id": "root",
+                "name": "Root",
+            },
+            "owner": {
+                "id": "owner",
+                "name": "Owner",
+            },
+        }
+
+
+pm.register(TestActorsPlugin(), name="undo_test_actors")
 
 
 @pytest_asyncio.fixture
@@ -10,6 +32,7 @@ async def ds_managed(tmp_path_factory):
     db_directory = tmp_path_factory.mktemp("dbs")
     db_path = db_directory / "demo.db"
     sqlite_utils.Database(db_path)["foo"].insert({"bar": 1})
+
     return Datasette(
         [db_path],
         metadata={
@@ -146,10 +169,22 @@ async def test_create_token(
         "/-/actor.json", headers={"Authorization": "Bearer {}".format(api_token)}
     )
     assert response.status_code == 200
-    expected_actor["token_id"] = ds_managed.unsign(
-        api_token.split("dsatok_")[1], namespace="dsatok"
-    )
+    token_id = ds_managed.unsign(api_token.split("dsatok_")[1], namespace="dsatok")
+    expected_actor["token_id"] = token_id
     assert response.json()["actor"] == expected_actor
+    # Token should be visible in the HTML list
+    response = await ds_managed.client.get(
+        "/-/api/tokens", cookies={"ds_actor": cookie}
+    )
+    assert response.status_code == 200
+    assert f'<a href="tokens/{token_id}">1&nbsp;-&nbsp;Active</a>' in response.text
+    assert "<td>Root (root)</td>" in response.text
+    # And should have its own page
+    token_details = await ds_managed.client.get(
+        f"/-/api/tokens/{token_id}", cookies={"ds_actor": cookie}
+    )
+    assert token_details.status_code == 200
+    assert "<dd>Root (root)</dd>" in token_details.text
 
 
 @pytest.mark.asyncio
