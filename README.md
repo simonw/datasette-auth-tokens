@@ -211,15 +211,17 @@ To configure this, use a `"query"` block in your plugin configuration like this:
     },
     "databases": {
         "tokens": {
-            "allow": {}
+            "allow": false
         }
     }
 }
 ```
 The `"sql"` key here contains the SQL query. The `"database"` key has the name of the attached database file that the query should be executed against - in this case it would execute against `tokens.db`.
 
-### Securing your custom tokens
+### Securing your tokens
 
-Anyone with access to your Datasette instance can use it to read the `token_secret` column in your tokens table. This probably isn't what you want!
+If you implement the custom pattern above which reads `token_secret` from your own `tokens` table, you need to be aware that anyone with read access to your Datasette instance could read those tokens from your table. This probably isn't what you want!
 
-To avoid this, you should lock down access to that table. The configuration example above shows how to do this using an `"allow": {}` block. Consult Datasette's [Permissions documentation](https://datasette.readthedocs.io/en/stable/authentication.html#permissions) for more information about how to lock down this kind of access.
+To avoid this, you should lock down access to that table. The configuration example above shows how to do this using an `"allow": false` block to deny all access to that `tokens` database.
+
+Consult Datasette's [Permissions documentation](https://datasette.readthedocs.io/en/stable/authentication.html#permissions) for more information about how to lock down this kind of access.
