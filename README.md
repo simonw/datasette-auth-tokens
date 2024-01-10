@@ -218,7 +218,7 @@ To configure this, use a `"query"` block in your plugin configuration like this:
 ```
 The `"sql"` key here contains the SQL query. The `"database"` key has the name of the attached database file that the query should be executed against - in this case it would execute against `tokens.db`.
 
-### Securing your tokens
+### Securing your custom tokens
 
 If you implement the custom pattern above which reads `token_secret` from your own `tokens` table, you need to be aware that anyone with read access to your Datasette instance could read those tokens from your table. This probably isn't what you want!
 
