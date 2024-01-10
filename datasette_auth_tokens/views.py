@@ -222,7 +222,7 @@ async def tokens_index(datasette, request):
     for token in tokens:
         actor = actors.get(token["actor_id"])
         token["actor"] = actor
-        token["actor_display"] = display_actor(actor)
+        token["actor_display"] = display_actor(actor) if actor else None
 
     def _format_permissions(json_string):
         return format_permissions(datasette, json.loads(json_string))
@@ -300,7 +300,7 @@ async def token_details(request, datasette):
 
     actors = await datasette.actors_from_ids([row["actor_id"]])
     actor_display = None
-    if actors and row["actor_id"] in actors:
+    if actors and actors.get(row["actor_id"]):
         actor_display = display_actor(actors[row["actor_id"]])
 
     return Response.html(

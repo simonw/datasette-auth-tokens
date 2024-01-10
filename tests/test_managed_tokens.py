@@ -11,17 +11,8 @@ class TestActorsPlugin:
     __name__ = "TestActorsPlugin"
 
     @hookimpl
-    def actors_from_ids(self, actor_ids):
-        return {
-            "root": {
-                "id": "root",
-                "name": "Root",
-            },
-            "owner": {
-                "id": "owner",
-                "name": "Owner",
-            },
-        }
+    def actors_from_ids(self, datasette):
+        return getattr(datasette, "_test_actors", {})
 
 
 pm.register(TestActorsPlugin(), name="undo_test_actors")
@@ -105,7 +96,7 @@ async def test_active_revoked_expired_tokens(ds_managed, ds_api_db, status, data
 
 
 async def _create_token(ds_managed, actor_id="root"):
-    root_cookie = ds_managed.sign({"a": {"id": actor_id}}, "actor")
+    root_cookie = ds_managed.client.actor_cookie({"id": actor_id})
     create_page = await ds_managed.client.get(
         "/-/api/tokens/create", cookies={"ds_actor": root_cookie}
     )
@@ -137,14 +128,29 @@ async def _create_token(ds_managed, actor_id="root"):
     ],
 )
 @pytest.mark.parametrize("database", (None, "api"))
+@pytest.mark.parametrize("custom_actor_display", (False, True))
 @pytest.mark.asyncio
 async def test_create_token(
-    ds_managed, ds_api_db, post_fields, expected_actor, database
+    ds_managed, ds_api_db, post_fields, expected_actor, database, custom_actor_display
 ):
-    # TODO: switch to ds_managed.client.actor_cookie after next Datasette release
     if database is not None:
         ds_managed = ds_api_db
-    cookie = ds_managed.sign({"a": {"id": "root"}}, "actor")
+
+    if custom_actor_display:
+        ds_managed._test_actors = {
+            "root": {
+                "id": "root",
+                "name": "Root",
+            },
+            "owner": {
+                "id": "owner",
+                "name": "Owner",
+            },
+        }
+    else:
+        ds_managed._test_actors = {}
+
+    cookie = ds_managed.client.actor_cookie({"id": "root"})
     # Load initial create token page
     create_page = await ds_managed.client.get(
         "/-/api/tokens/create", cookies={"ds_actor": cookie}
@@ -178,13 +184,19 @@ async def test_create_token(
     )
     assert response.status_code == 200
     assert f'<a href="tokens/{token_id}">1&nbsp;-&nbsp;Active</a>' in response.text
-    assert "<td>Root (root)</td>" in response.text
+    if custom_actor_display:
+        assert "<td>Root (root)</td>" in response.text
+    else:
+        assert "<td>root</td>" in response.text
     # And should have its own page
     token_details = await ds_managed.client.get(
         f"/-/api/tokens/{token_id}", cookies={"ds_actor": cookie}
     )
     assert token_details.status_code == 200
-    assert "<dd>Root (root)</dd>" in token_details.text
+    if custom_actor_display:
+        assert "<dd>Root (root)</dd>" in token_details.text
+    else:
+        assert "<dd>root</dd>" in token_details.text
 
 
 @pytest.mark.asyncio
@@ -212,7 +224,7 @@ async def test_revoke_permissions(ds_managed, scenario, should_allow_revoke):
     assert (await get_token(token_id))["ended_timestamp"] is None
 
     if scenario != "anonymous":
-        cookies = {"ds_actor": ds_managed.sign({"a": {"id": scenario}}, "actor")}
+        cookies = {"ds_actor": ds_managed.client.actor_cookie({"id": scenario})}
     else:
         cookies = {}
 
@@ -276,7 +288,7 @@ async def test_viewing_tokens_expires_some(ds_managed):
     # Viewing the list of tokens should expire it
     response = await ds_managed.client.get(
         "/-/api/tokens",
-        cookies={"ds_actor": ds_managed.sign({"a": {"id": "admin"}}, "actor")},
+        cookies={"ds_actor": ds_managed.client.actor_cookie({"id": "admin"})},
     )
     assert response.status_code == 200
     token = await get_token()
@@ -288,7 +300,7 @@ async def test_token_pagination(ds_managed):
     num_tokens = 100
     for i in range(num_tokens):
         await _create_token(ds_managed)
-    cookies = {"ds_actor": ds_managed.sign({"a": {"id": "admin"}}, "actor")}
+    cookies = {"ds_actor": ds_managed.client.actor_cookie({"id": "admin"})}
     collected = []
     next_ = None
     pages = 0
@@ -320,7 +332,7 @@ async def test_token_pagination(ds_managed):
 
 @pytest.mark.asyncio
 async def test_tokens_cannot_be_restricted_to_auth_tokens_revoke_any(ds_managed):
-    root_cookie = ds_managed.sign({"a": {"id": "root"}}, "actor")
+    root_cookie = ds_managed.client.actor_cookie({"id": "root"})
     create_page = await ds_managed.client.get(
         "/-/api/tokens/create", cookies={"ds_actor": root_cookie}
     )
