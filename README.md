@@ -143,7 +143,19 @@ This will add a "Create API token" option to the Datasette menu.
 
 Tokens that are created will be kept in a new `_datasette_auth_tokens` table.
 
-Navigating to that table page will provide the option to view and revoke tokens.
+Users need the `auth-tokens-create` permission to create tokens. One way to grant that is to add this `"permissions"` block to your configuration:
+
+```json
+{
+    "permissions": {
+        "auth-tokens-create": {
+            "id": "*"
+        }
+    }
+}
+```
+
+Use the "Create API token" option in the Datasette menu or navigate to `/-/api/tokens` to create tokens and manage tokens.
 
 When you create a new token a signed token string will be presented to you. You need to store this, as it is not stored directly in the database table and can only be retrieved once.
 

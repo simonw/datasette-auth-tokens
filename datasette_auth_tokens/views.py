@@ -13,7 +13,7 @@ TOKEN_PAGE_SIZE = 30
 
 
 async def create_api_token(request, datasette):
-    check_permission(datasette, request.actor)
+    await check_permission(datasette, request.actor)
     if request.method == "GET":
         return Response.html(
             await datasette.render_template(
@@ -111,21 +111,17 @@ async def create_api_token(request, datasette):
         raise Forbidden("Invalid method")
 
 
-def check_permission(datasette, actor):
-    if not actor:
-        raise Forbidden("You must be logged in to create a token")
-    if not actor.get("id"):
+async def check_permission(datasette, actor):
+    if not actor or not actor.get("id"):
         raise Forbidden(
             "You must be logged in as an actor with an ID to create a token"
         )
-    if actor.get("token"):
-        raise Forbidden(
-            "Token authentication cannot be used to create additional tokens"
-        )
+    if not await datasette.permission_allowed(actor, "auth-tokens-create"):
+        raise Forbidden("You do not have permission to create a token")
 
 
 async def _shared(datasette, request):
-    check_permission(datasette, request.actor)
+    await check_permission(datasette, request.actor)
     db = Config(datasette).db
 
     tokens_exist = bool(
@@ -164,7 +160,13 @@ async def _shared(datasette, request):
         "all_permissions": [
             {"name": key, "description": value.description}
             for key, value in datasette.permissions.items()
-            if key not in ("auth-tokens-revoke-any", "debug-menu", "permissions-debug")
+            if key
+            not in (
+                "auth-tokens-create",
+                "auth-tokens-revoke-any",
+                "debug-menu",
+                "permissions-debug",
+            )
         ],
         "database_permissions": [
             {"name": key, "description": value.description}

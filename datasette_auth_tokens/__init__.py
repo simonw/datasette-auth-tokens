@@ -31,16 +31,20 @@ def table_actions(datasette, actor, database, table):
 def menu_links(datasette, actor):
     if not actor:
         return
-    try:
-        check_permission(datasette, actor)
-    except Forbidden:
-        return
-    return [
-        {
-            "href": datasette.urls.path("/-/api/tokens/create"),
-            "label": "Create API token",
-        }
-    ]
+
+    async def inner():
+        try:
+            await check_permission(datasette, actor)
+        except Forbidden:
+            return
+        return [
+            {
+                "href": datasette.urls.path("/-/api/tokens/create"),
+                "label": "Create API token",
+            }
+        ]
+
+    return inner
 
 
 @hookimpl
@@ -83,7 +87,16 @@ def register_permissions():
             takes_database=False,
             takes_resource=False,
             default=False,
-        )
+        ),
+        Permission(
+            name="auth-tokens-create",
+            abbr=None,
+            description="Create API tokens",
+            takes_database=False,
+            takes_resource=False,
+            # If this was True anonymous users would be able to create tokens:
+            default=False,
+        ),
     ]
 
 

@@ -7,23 +7,27 @@ import sqlite_utils
 import time
 
 
-class TestActorsPlugin:
-    __name__ = "TestActorsPlugin"
+class ActorsPlugin:
+    __name__ = "ActorsPlugin"
 
     @hookimpl
     def actors_from_ids(self, datasette):
         return getattr(datasette, "_test_actors", {})
 
 
-pm.register(TestActorsPlugin(), name="undo_test_actors")
+pm.register(ActorsPlugin(), name="undo_actors_plugin")
 
 
-@pytest_asyncio.fixture
-async def ds_managed(tmp_path_factory):
+@pytest.fixture
+def db_path(tmp_path_factory):
     db_directory = tmp_path_factory.mktemp("dbs")
     db_path = db_directory / "demo.db"
     sqlite_utils.Database(db_path)["foo"].insert({"bar": 1})
+    return db_path
 
+
+@pytest_asyncio.fixture
+async def ds_managed(db_path):
     return Datasette(
         [db_path],
         metadata={
@@ -33,9 +37,39 @@ async def ds_managed(tmp_path_factory):
                     "param": "_auth_token",
                 }
             },
-            "permissions": {"auth-tokens-revoke-any": {"id": "admin"}},
+            "permissions": {
+                "auth-tokens-revoke-any": {"id": "admin"},
+                "auth-tokens-create": {"id": "*"},
+            },
         },
     )
+
+
+@pytest_asyncio.fixture
+async def ds_managed_is_member(db_path):
+    class IsMemberPlugin:
+        __name__ = "IsMemberPlugin"
+
+        @hookimpl
+        def permission_allowed(self, datasette, actor, action):
+            if action == "auth-tokens-create":
+                return actor.get("is_member", False)
+
+    pm.register(IsMemberPlugin(), name="undo_is_member_plugin")
+    try:
+        yield Datasette(
+            [db_path],
+            metadata={
+                "plugins": {
+                    "datasette-auth-tokens": {
+                        "manage_tokens": True,
+                        "param": "_auth_token",
+                    }
+                },
+            },
+        )
+    finally:
+        pm.unregister(name="undo_is_member_plugin")
 
 
 # Alternative database fixture
@@ -55,6 +89,9 @@ async def ds_api_db(tmp_path_factory):
                     "param": "_auth_token",
                     "manage_tokens_database": "api",
                 }
+            },
+            "permissions": {
+                "auth-tokens-create": {"id": "*"},
             },
         },
     )
@@ -197,6 +234,35 @@ async def test_create_token(
         assert "<dd>Root (root)</dd>" in token_details.text
     else:
         assert "<dd>root</dd>" in token_details.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("is_member", (False, True))
+async def test_create_token_permissions(ds_managed_is_member, is_member):
+    # We always get CSRF token from /-/permissions
+    actor = {"id": "root", "is_member": is_member}
+    cookies = {"ds_actor": ds_managed_is_member.client.actor_cookie(actor)}
+    csrftoken = (
+        await ds_managed_is_member.client.get("/-/permissions", cookies=cookies)
+    ).cookies["ds_csrftoken"]
+    cookies["ds_csrftoken"] = csrftoken
+    create_page = await ds_managed_is_member.client.get(
+        "/-/api/tokens/create", cookies=cookies
+    )
+    if is_member:
+        assert create_page.status_code == 200
+    else:
+        assert create_page.status_code == 403
+    # Now try a POST to create a token
+    response = await ds_managed_is_member.client.post(
+        "/-/api/tokens/create",
+        data={"csrftoken": csrftoken},
+        cookies=cookies,
+    )
+    if is_member:
+        assert response.status_code == 200
+    else:
+        assert response.status_code == 403
 
 
 @pytest.mark.asyncio
