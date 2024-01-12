@@ -165,6 +165,12 @@ datasette -m metadata.json mydb.db tokens.db --create
 ```
 The `--create` option can be used to tell Datasette to create the `tokens.db` database file if it does not already exist.
 
+### Revoking tokens
+
+A token can be revoked by the user that created it by clicking the "Revoke this token" button at the bottom of the token page that is linked to from `/-/api/tokens`.
+
+A user with the `auth-tokens-revoke-any` permission can revoke any token.
+
 ## Custom tokens from your database
 
 If you decide not to use managed tokens mode, you can instead configure `datasette-auth-tokens` to use tokens that are stored in your own custom database tables.
