@@ -38,7 +38,7 @@ async def ds_managed(db_path):
                 }
             },
             "permissions": {
-                "auth-tokens-revoke-any": {"id": "admin"},
+                "auth-tokens-revoke-all": {"id": "admin"},
                 "auth-tokens-create": {"id": "*"},
             },
         },
@@ -397,9 +397,9 @@ async def test_token_pagination(ds_managed):
 
 
 @pytest.mark.asyncio
-async def test_tokens_cannot_be_restricted_to_auth_tokens_revoke_any(ds_managed):
+async def test_tokens_cannot_be_restricted_to_auth_tokens_revoke_all(ds_managed):
     root_cookie = ds_managed.client.actor_cookie({"id": "root"})
     create_page = await ds_managed.client.get(
         "/-/api/tokens/create", cookies={"ds_actor": root_cookie}
     )
-    assert "auth-tokens-revoke-any" not in create_page.text
+    assert "auth-tokens-revoke-all" not in create_page.text

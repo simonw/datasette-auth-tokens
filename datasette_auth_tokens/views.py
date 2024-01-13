@@ -163,7 +163,7 @@ async def _shared(datasette, request):
             if key
             not in (
                 "auth-tokens-create",
-                "auth-tokens-revoke-any",
+                "auth-tokens-revoke-all",
                 "debug-menu",
                 "permissions-debug",
             )
@@ -262,7 +262,7 @@ async def token_details(request, datasette):
     if row is None:
         raise NotFound("Token not found")
 
-    # User can manage if they own the token or they have auth-tokens-revoke-any
+    # User can manage if they own the token or they have auth-tokens-revoke-all
     can_manage = await actor_can_manage(datasette, request.actor, row["actor_id"])
     if not can_manage:
         raise Forbidden("You do not have permission to manage this token")
@@ -336,8 +336,8 @@ async def actor_can_manage(datasette, actor, token_actor_id):
         return False
     if token_actor_id and str(token_actor_id) == str(actor.get("id")):
         return True
-    # User with auth-tokens-revoke-any can revoke any token
-    return await datasette.permission_allowed(actor, "auth-tokens-revoke-any")
+    # User with auth-tokens-revoke-all can revoke any token
+    return await datasette.permission_allowed(actor, "auth-tokens-revoke-all")
 
 
 class Config:

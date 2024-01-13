@@ -81,7 +81,7 @@ def register_routes(datasette):
 def register_permissions():
     return [
         Permission(
-            name="auth-tokens-revoke-any",
+            name="auth-tokens-revoke-all",
             abbr=None,
             description="Revoke any API tokens",
             takes_database=False,

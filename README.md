@@ -181,7 +181,7 @@ The `--create` option can be used to tell Datasette to create the `tokens.db` da
 
 A token can be revoked by the user that created it by clicking the "Revoke this token" button at the bottom of the token page that is linked to from `/-/api/tokens`.
 
-A user with the `auth-tokens-revoke-any` permission can revoke any token.
+A user with the `auth-tokens-revoke-all` permission can revoke any token.
 
 ## Custom tokens from your database
 
