@@ -89,6 +89,14 @@ def register_permissions():
             default=False,
         ),
         Permission(
+            name="auth-tokens-view-all",
+            abbr=None,
+            description="View all API tokens",
+            takes_database=False,
+            takes_resource=False,
+            default=False,
+        ),
+        Permission(
             name="auth-tokens-create",
             abbr=None,
             description="Create API tokens",

@@ -36,7 +36,7 @@ dd {
     <dd><pre>{{ restrictions }}</pre></dd>
 </dl>
 
-{% if token_status == "Active" %}
+{% if token_status == "Active" and can_revoke %}
 <br>
 <form action="" method="POST">
     <p>

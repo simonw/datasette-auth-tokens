@@ -39,6 +39,7 @@ async def ds_managed(db_path):
             },
             "permissions": {
                 "auth-tokens-revoke-all": {"id": "admin"},
+                "auth-tokens-view-all": {"id": "admin"},
                 "auth-tokens-create": {"id": "*"},
             },
         },
@@ -273,15 +274,17 @@ async def test_create_token_permissions(ds_managed_is_member, is_member):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "scenario,should_allow_revoke",
+    "scenario,should_allow_view,should_allow_revoke",
     (
-        ("owner", True),
-        ("admin", True),
-        ("other-user", False),
-        ("anonymous", False),
+        ("owner", True, True),
+        ("admin", True, True),
+        ("other-user", False, False),
+        ("anonymous", False, False),
     ),
 )
-async def test_revoke_permissions(ds_managed, scenario, should_allow_revoke):
+async def test_token_permissions(
+    ds_managed, scenario, should_allow_view, should_allow_revoke
+):
     # Create a token
     token_id, _ = await _create_token(ds_managed, "owner")
 
@@ -307,14 +310,14 @@ async def test_revoke_permissions(ds_managed, scenario, should_allow_revoke):
 
     csrftoken = "-"
 
-    if not should_allow_revoke:
+    if not should_allow_view:
         assert response.status_code == 403
     else:
         assert response.status_code == 200
         csrftoken = response.cookies["ds_csrftoken"]
         cookies["ds_csrftoken"] = csrftoken
         # Is the revoke button present?
-        if scenario in ("owner", "admin"):
+        if should_allow_revoke:
             assert 'name="revoke"' in response.text
         else:
             assert 'name="revoke"' not in response.text

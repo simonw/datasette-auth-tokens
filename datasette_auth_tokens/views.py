@@ -193,6 +193,19 @@ async def tokens_index(datasette, request):
 
     next = request.args.get("next")
 
+    where_bits = []
+    params = {}
+    if next:
+        where_bits.append("id <= :next")
+        params["next"] = next
+    where = " and ".join(where_bits)
+
+    # Users can only see their own tokens, unless they have the
+    # auth-tokens-view-all permission
+    if not await datasette.permission_allowed(request.actor, "auth-tokens-view-all"):
+        where_bits.append("actor_id = :actor_id")
+        params["actor_id"] = request.actor["id"] if request.actor else None
+
     tokens = [
         dict(row)
         for row in (
@@ -201,10 +214,10 @@ async def tokens_index(datasette, request):
                 select * from _datasette_auth_tokens
                 {where} order by id desc limit {limit}
             """.format(
-                    where=" where id <= :next" if next else "",
+                    where="where {}".format(where) if where else "",
                     limit=TOKEN_PAGE_SIZE + 1,
                 ),
-                {"next": next} if next else {},
+                params,
             )
         ).rows
     ]
@@ -266,9 +279,10 @@ async def token_details(request, datasette):
         raise NotFound("Token not found")
 
     # User can manage if they own the token or they have auth-tokens-revoke-all
-    can_manage = await actor_can_manage(datasette, request.actor, row["actor_id"])
-    if not can_manage:
+    if not await actor_can_view(datasette, request.actor, row["actor_id"]):
         raise Forbidden("You do not have permission to manage this token")
+
+    can_revoke = await actor_can_revoke(datasette, request.actor, row["actor_id"])
 
     if (
         row["expires_after_seconds"]
@@ -283,7 +297,7 @@ async def token_details(request, datasette):
     if request.method == "POST":
         post_vars = await request.post_vars()
         if post_vars.get("revoke"):
-            if not can_manage:
+            if not can_revoke:
                 raise Forbidden("You do not have permission to revoke this token")
             else:
                 await db.execute_write(
@@ -320,6 +334,7 @@ async def token_details(request, datasette):
                 "timestamp": _timestamp,
                 "ago_difference": ago_difference,
                 "restrictions": restrictions,
+                "can_revoke": can_revoke,
             },
             request=request,
         )
@@ -333,7 +348,17 @@ def _timestamp(ts):
         return ""
 
 
-async def actor_can_manage(datasette, actor, token_actor_id):
+async def actor_can_view(datasette, actor, token_actor_id):
+    if not actor or not actor.get("id"):
+        # Only works for actors that have an ID set
+        return False
+    if token_actor_id and str(token_actor_id) == str(actor.get("id")):
+        return True
+    # User with auth-tokens-view-all can view any token
+    return await datasette.permission_allowed(actor, "auth-tokens-view-all")
+
+
+async def actor_can_revoke(datasette, actor, token_actor_id):
     if not actor or not actor.get("id"):
         # Only works for actors that have an ID set
         return False

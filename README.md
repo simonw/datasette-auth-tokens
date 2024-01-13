@@ -177,6 +177,12 @@ datasette -m metadata.json mydb.db tokens.db --create
 ```
 The `--create` option can be used to tell Datasette to create the `tokens.db` database file if it does not already exist.
 
+### Viewing tokens
+
+By default, users can only view tokens that they themselves have created on the `/-/api/tokens` page.
+
+Grant the `auth-tokens-view-all` permission to allow a user to view all tokens, even those created by other users.
+
 ### Revoking tokens
 
 A token can be revoked by the user that created it by clicking the "Revoke this token" button at the bottom of the token page that is linked to from `/-/api/tokens`.
