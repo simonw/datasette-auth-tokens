@@ -239,6 +239,9 @@ async def tokens_index(datasette, request):
                 "timestamp": _timestamp,
                 "ago_difference": ago_difference,
                 "format_permissions": _format_permissions,
+                "can_create_tokens": await datasette.permission_allowed(
+                    request.actor, "auth-tokens-create"
+                ),
             },
             request=request,
         )

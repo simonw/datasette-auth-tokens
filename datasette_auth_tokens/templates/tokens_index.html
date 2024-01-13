@@ -23,8 +23,13 @@ tr.token-E {
 
 <h1>API tokens</h1>
 
-<p><a href="tokens/create">Create an API token</a></p>
+{% if can_create_tokens %}
+  <p><a href="tokens/create">Create an API token</a></p>
+{% else %}
+  <p>You do not have permission to create API tokens.</p>
+{% endif %}
 
+{% if tokens %}
 <table>
 <tr>
   <th>Token</th>
@@ -47,6 +52,7 @@ tr.token-E {
 </tr>
 {% endfor %}
 </table>
+{% endif %}
 
 {% if next %}
 <p style="margin-top: 1em"><a href="?next={{ next }}">Next page</a></p>

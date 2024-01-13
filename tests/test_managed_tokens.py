@@ -239,9 +239,15 @@ async def test_create_token(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("is_member", (False, True))
 async def test_create_token_permissions(ds_managed_is_member, is_member):
-    # We always get CSRF token from /-/permissions
     actor = {"id": "root", "is_member": is_member}
     cookies = {"ds_actor": ds_managed_is_member.client.actor_cookie(actor)}
+    # tokens/create link should only show for users with permission to create tokens
+    list_page = await ds_managed_is_member.client.get("/-/api/tokens", cookies=cookies)
+    if is_member:
+        assert 'href="tokens/create"' in list_page.text
+    else:
+        assert 'href="tokens/create"' not in list_page.text
+    # We always get CSRF token from /-/permissions
     csrftoken = (
         await ds_managed_is_member.client.get("/-/permissions", cookies=cookies)
     ).cookies["ds_csrftoken"]
