@@ -225,17 +225,17 @@ def make_expire_function(token_id=None):
 
     def expire_tokens(conn):
         # Expire all tokens that are due to expire - or just specified token
-        conn.execute(
-            """
-            update _datasette_auth_tokens
-            set token_status = 'E', ended_timestamp = :now
-            where {where}
-        """.format(
-                where=" and ".join(where_bits)
-            ),
-            {"now": int(time.time()), "token_id": token_id},
-        )
-        conn.commit()
+        with conn:
+            conn.execute(
+                """
+                update _datasette_auth_tokens
+                set token_status = 'E', ended_timestamp = :now
+                where {where}
+            """.format(
+                    where=" and ".join(where_bits)
+                ),
+                {"now": int(time.time()), "token_id": token_id},
+            )
 
     return expire_tokens
 
