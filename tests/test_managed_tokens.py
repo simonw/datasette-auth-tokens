@@ -1,4 +1,4 @@
-from datasette.app import Datasette
+from datasette_test import Datasette
 from datasette.plugins import pm
 from datasette import hookimpl
 import pytest
@@ -30,13 +30,13 @@ def db_path(tmp_path_factory):
 async def ds_managed(db_path):
     return Datasette(
         [db_path],
-        metadata={
-            "plugins": {
-                "datasette-auth-tokens": {
-                    "manage_tokens": True,
-                    "param": "_auth_token",
-                }
-            },
+        plugin_config={
+            "datasette-auth-tokens": {
+                "manage_tokens": True,
+                "param": "_auth_token",
+            }
+        },
+        config={
             "permissions": {
                 "auth-tokens-revoke-all": {"id": "admin"},
                 "auth-tokens-view-all": {"id": "admin"},
@@ -60,13 +60,11 @@ async def ds_managed_is_member(db_path):
     try:
         yield Datasette(
             [db_path],
-            metadata={
-                "plugins": {
-                    "datasette-auth-tokens": {
-                        "manage_tokens": True,
-                        "param": "_auth_token",
-                    }
-                },
+            plugin_config={
+                "datasette-auth-tokens": {
+                    "manage_tokens": True,
+                    "param": "_auth_token",
+                }
             },
         )
     finally:
@@ -83,14 +81,14 @@ async def ds_api_db(tmp_path_factory):
     sqlite_utils.Database(api_db_path)["comment"].insert({"this-is-for-tokens": 1})
     return Datasette(
         [db_path, api_db_path],
-        metadata={
-            "plugins": {
-                "datasette-auth-tokens": {
-                    "manage_tokens": True,
-                    "param": "_auth_token",
-                    "manage_tokens_database": "api",
-                }
-            },
+        plugin_config={
+            "datasette-auth-tokens": {
+                "manage_tokens": True,
+                "param": "_auth_token",
+                "manage_tokens_database": "api",
+            }
+        },
+        config={
             "permissions": {
                 "auth-tokens-create": {"id": "*"},
             },

@@ -1,4 +1,4 @@
-from datasette.app import Datasette
+from datasette_test import Datasette
 import pytest
 import pytest_asyncio
 import sqlite_utils
@@ -30,23 +30,23 @@ async def ds(tmp_path_factory):
     )
     return Datasette(
         [db_path1, db_path2],
-        metadata={
-            "plugins": {
-                "datasette-auth-tokens": {
-                    "query": {
-                        "sql": (
-                            "select actor_id, actor_name, token_secret "
-                            "from tokens where id = :token_id"
-                        ),
-                        "database": "tokens",
-                    },
-                    "tokens": [
-                        {"token": "one", "actor": {"id": "one"}},
-                        {"token": "two", "actor": {"id": "two"}},
-                    ],
-                    "param": "_auth_token",
-                }
-            },
+        plugin_config={
+            "datasette-auth-tokens": {
+                "query": {
+                    "sql": (
+                        "select actor_id, actor_name, token_secret "
+                        "from tokens where id = :token_id"
+                    ),
+                    "database": "tokens",
+                },
+                "tokens": [
+                    {"token": "one", "actor": {"id": "one"}},
+                    {"token": "two", "actor": {"id": "two"}},
+                ],
+                "param": "_auth_token",
+            }
+        },
+        config={
             "databases": {
                 "demo": {"allow_sql": {"id": "one"}},
                 "tokens": {"allow": {}},
