@@ -129,6 +129,7 @@ async def _shared(datasette, request):
     )
     # Build list of databases and tables the user has permission to view
     database_with_tables = []
+    databases_with_at_least_one_table = []
     for database in datasette.databases.values():
         if database.name in ("_internal", "_memory"):
             continue
@@ -148,13 +149,15 @@ async def _shared(datasette, request):
             ):
                 continue
             tables.append({"name": table, "encoded": tilde_encode(table)})
-        database_with_tables.append(
-            {
-                "name": database.name,
-                "encoded": tilde_encode(database.name),
-                "tables": tables,
-            }
-        )
+
+        db_info = {
+            "name": database.name,
+            "encoded": tilde_encode(database.name),
+            "tables": tables,
+        }
+        database_with_tables.append(db_info)
+        if tables:
+            databases_with_at_least_one_table.append(db_info)
     return {
         "actor": request.actor,
         "all_permissions": [
@@ -179,6 +182,7 @@ async def _shared(datasette, request):
             if value.takes_resource
         ],
         "database_with_tables": database_with_tables,
+        "databases_with_at_least_one_table": databases_with_at_least_one_table,
         "tokens_exist": tokens_exist,
     }
 

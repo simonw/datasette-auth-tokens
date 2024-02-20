@@ -80,9 +80,9 @@ form div label {
         {% endfor %}
       </ul>
     {% endfor %}
-    {% if database_with_tables %}
+    {% if databases_with_at_least_one_table %}
     <h2>Specific tables in specific databases</h2>
-    {% for database in database_with_tables %}
+    {% for database in databases_with_at_least_one_table %}
       {% for table in database.tables %}
         <h3>{{ database.name }}: {{ table.name }}</h3>
         <ul>

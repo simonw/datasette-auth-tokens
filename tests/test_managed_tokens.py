@@ -410,3 +410,33 @@ async def test_tokens_cannot_be_restricted_to_auth_tokens_revoke_all(ds_managed)
         "/-/api/tokens/create", cookies={"ds_actor": root_cookie}
     )
     assert "auth-tokens-revoke-all" not in create_page.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("has_a_table", (True, False))
+async def test_no_table_heading_if_no_tables(tmpdir, has_a_table):
+    # https://github.com/simonw/datasette-auth-tokens/issues/32
+    db_path = str(tmpdir / "empty.db")
+    db = sqlite_utils.Database(db_path)
+    db.vacuum()
+    if has_a_table:
+        db["foo"].insert({"bar": 1})
+    ds = Datasette(
+        [db_path],
+        plugin_config={"datasette-auth-tokens": {"manage_tokens": True}},
+        config={
+            "permissions": {
+                "auth-tokens-create": {"id": "*"},
+            },
+        },
+    )
+    response = await ds.client.get(
+        "/-/api/tokens/create",
+        cookies={"ds_actor": ds.client.actor_cookie({"id": "admin"})},
+    )
+    assert response.status_code == 200
+    fragment = ">Specific tables in specific databases<"
+    if has_a_table:
+        assert fragment in response.text
+    else:
+        assert fragment not in response.text
