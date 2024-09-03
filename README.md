@@ -181,7 +181,8 @@ In Datasette 1.0 you can instead use the `-s` option like this:
 ```bash
 datasette \
   -s plugins.datasette-auth-tokens.manage_tokens true \
-  -s plugins.datasette-auth-tokens.manage_tokens_database tokens
+  -s plugins.datasette-auth-tokens.manage_tokens_database tokens \
+  -s permissions.auth-tokens-create.id '*' # to enable token creation
 ```
 
 ### Viewing tokens
