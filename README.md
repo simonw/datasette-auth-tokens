@@ -34,7 +34,7 @@ Decide on the actor that this token should represent, for example:
 }
 ```
 
-You can then use `"allow"` blocks to provide that token with permission to access specific actions. To enable access to a configured writable SQL query you could use this in your `metadata.json`:
+You can then use `"allow"` blocks to provide that token with permission to access specific actions. To enable access to a configured writable SQL query you could use this in your `config.json` (for Datasette 1.0) or `metadata.json`: 
 
 ```json
 {
@@ -71,7 +71,7 @@ This uses Datasette's [secret configuration values mechanism](https://datasette.
 Run Datasette like this:
 ```bash
 BOT_TOKEN="this-is-the-secret-token" \
-    datasette -m metadata.json
+    datasette -c config.json
 ```
 You can now run authenticated API queries like this:
 ```bash
@@ -83,7 +83,7 @@ curl -H 'Authorization: Bearer this-is-the-secret-token' \
 ```
 Additionally you can allow passing the token as a query string parameter, although that's disabled by default given the security implications of URLs with secret tokens included. This may be useful to easily allow embedding data between different services.
 
-Simply enable it using the `param` config value:
+Enable it using the `param` config value:
 
 ```json
 {
@@ -128,7 +128,7 @@ curl http://127.0.0.1:8001/:memory:/show_version.json?_shape=array&_auth_token=t
 
 `datasette-auth-tokens` provides a managed tokens mode, where tokens are stored in a SQLite database table and the plugin provides an interface for creating and revoking tokens.
 
-To turn this mode on, add `"manage_tokens": true` to your plugin configuration in `metadata.json`:
+To turn this mode on, add `"manage_tokens": true` to your plugin configuration:
 
 ```json
 {
@@ -173,9 +173,16 @@ If you have multiple databases attached to Datasette you will need to specify wh
 ```
 Now start Datasette like this:
 ```bash
-datasette -m metadata.json mydb.db tokens.db --create
+datasette -c config.json mydb.db tokens.db --create
 ```
 The `--create` option can be used to tell Datasette to create the `tokens.db` database file if it does not already exist.
+
+In Datasette 1.0 you can instead use the `-s` option like this:
+```bash
+datasette \
+  -s plugins.datasette-auth-tokens.manage_tokens true \
+  -s plugins.datasette-auth-tokens.manage_tokens_database tokens
+```
 
 ### Viewing tokens
 
