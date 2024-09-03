@@ -71,6 +71,7 @@ async def test_token(ds, token, path, expected_status):
     response = await ds.client.get(
         path,
         headers={"Authorization": "Bearer {}".format(token)},
+        follow_redirects=True,
     )
     assert response.status_code == expected_status
 
@@ -89,7 +90,7 @@ async def test_token(ds, token, path, expected_status):
 @pytest.mark.asyncio
 async def test_query_param(ds, token, path, expected_status):
     response = await ds.client.get(
-        "{}&_auth_token={}".format(path, token),
+        "{}&_auth_token={}".format(path, token), follow_redirects=True
     )
     assert response.status_code == expected_status
 
@@ -112,6 +113,7 @@ async def test_query(ds, token, path, expected_status):
     response = await ds.client.get(
         path,
         headers={"Authorization": "Bearer {}".format(token)},
+        follow_redirects=True,
     )
     assert response.status_code == expected_status
 
@@ -130,6 +132,7 @@ async def test_actor(ds, token, expected_actor):
     response = await ds.client.get(
         "/-/actor.json",
         headers={"Authorization": "Bearer {}".format(token)},
+        follow_redirects=True,
     )
     assert response.json() == {"actor": expected_actor}
 
