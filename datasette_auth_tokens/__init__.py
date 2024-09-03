@@ -49,6 +49,7 @@ def menu_links(datasette, actor):
 
 @hookimpl
 def startup(datasette):
+    print("STARTUP")
     config = Config(datasette)
     if not config.enabled:
         return

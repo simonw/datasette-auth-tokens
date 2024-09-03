@@ -185,6 +185,23 @@ datasette \
   -s permissions.auth-tokens-create.id '*' # to enable token creation
 ```
 
+By default users will be able to create tokens with any expiry, including tokens that never expire at all.
+
+You can configure a maximum expiry time for tokens by adding a `max_expiry` setting to your plugin configuration:
+
+```json
+{
+    "plugins": {
+        "datasette-auth-tokens": {
+            "manage_tokens": true,
+            "max_expiry_seconds": 86400
+        }
+    }
+}
+```
+
+The value should be specified in seconds.
+
 ### Viewing tokens
 
 By default, users can only view tokens that they themselves have created on the `/-/api/tokens` page.

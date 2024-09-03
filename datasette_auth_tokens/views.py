@@ -14,11 +14,13 @@ TOKEN_PAGE_SIZE = 30
 
 async def create_api_token(request, datasette):
     await check_permission(datasette, request.actor)
+    config = Config(datasette)
+
     if request.method == "GET":
         return Response.html(
             await datasette.render_template(
                 "create_api_token.html",
-                await _shared(datasette, request),
+                await _shared(datasette, request, config),
                 request=request,
             )
         )
@@ -26,16 +28,17 @@ async def create_api_token(request, datasette):
         post = await request.post_vars()
         errors = []
         expires_after = None
-        if post.get("expire_type"):
+        if post.get("expire_duration") or config.max_expiry:
             duration_string = post.get("expire_duration")
             if (
                 not duration_string
                 or not duration_string.isdigit()
                 or not int(duration_string) > 0
             ):
-                errors.append("Invalid expire duration")
+                if duration_string:
+                    errors.append("Invalid expiry duration")
             else:
-                unit = post["expire_type"]
+                unit = post.get("expire_type")
                 if unit == "minutes":
                     expires_after = int(duration_string) * 60
                 elif unit == "hours":
@@ -44,6 +47,17 @@ async def create_api_token(request, datasette):
                     expires_after = int(duration_string) * 60 * 60 * 24
                 else:
                     errors.append("Invalid expire duration unit")
+
+            # Enforce max_expiry if set
+            if config.max_expiry:
+                if not expires_after:
+                    errors.append("Tokens must have an expiry")
+                elif expires_after > config.max_expiry:
+                    errors.append(
+                        "Token expiry must be less than {} seconds".format(
+                            config.max_expiry
+                        )
+                    )
 
         # Are there any restrictions?
         restrict_all = []
@@ -80,27 +94,28 @@ async def create_api_token(request, datasette):
         )
         permissions = token_bits.get("_r") or None
 
-        config = Config(datasette)
         db = config.db
-        cursor = await db.execute_write(
-            """
-            insert into _datasette_auth_tokens
-            (secret_version, description, permissions, actor_id, created_timestamp, expires_after_seconds)
-            values
-            (:secret_version, :description, :permissions, :actor_id, :created_timestamp, :expires_after_seconds)
-        """,
-            {
-                "secret_version": 0,
-                "permissions": json.dumps(permissions),
-                "description": post.get("description") or None,
-                "actor_id": request.actor["id"],
-                "created_timestamp": int(time.time()),
-                "expires_after_seconds": expires_after,
-            },
-        )
-        token = "dsatok_{}".format(datasette.sign(cursor.lastrowid, "dsatok"))
+        token = None
+        if not errors:
+            cursor = await db.execute_write(
+                """
+                insert into _datasette_auth_tokens
+                (secret_version, description, permissions, actor_id, created_timestamp, expires_after_seconds)
+                values
+                (:secret_version, :description, :permissions, :actor_id, :created_timestamp, :expires_after_seconds)
+            """,
+                {
+                    "secret_version": 0,
+                    "permissions": json.dumps(permissions),
+                    "description": post.get("description") or None,
+                    "actor_id": request.actor["id"],
+                    "created_timestamp": int(time.time()),
+                    "expires_after_seconds": expires_after,
+                },
+            )
+            token = "dsatok_{}".format(datasette.sign(cursor.lastrowid, "dsatok"))
 
-        context = await _shared(datasette, request)
+        context = await _shared(datasette, request, config)
         context.update({"errors": errors, "token": token, "token_bits": token_bits})
         return Response.html(
             await datasette.render_template(
@@ -120,7 +135,7 @@ async def check_permission(datasette, actor):
         raise Forbidden("You do not have permission to create a token")
 
 
-async def _shared(datasette, request):
+async def _shared(datasette, request, config):
     await check_permission(datasette, request.actor)
     db = Config(datasette).db
 
@@ -158,6 +173,15 @@ async def _shared(datasette, request):
         database_with_tables.append(db_info)
         if tables:
             databases_with_at_least_one_table.append(db_info)
+
+    max_expiry = {}
+    if config.max_expiry:
+        max_expiry = {
+            "seconds": config.max_expiry,
+            "hours": None,
+            "days": None,
+        }
+
     return {
         "actor": request.actor,
         "all_permissions": [
@@ -184,6 +208,7 @@ async def _shared(datasette, request):
         "database_with_tables": database_with_tables,
         "databases_with_at_least_one_table": databases_with_at_least_one_table,
         "tokens_exist": tokens_exist,
+        "max_expiry": max_expiry,
     }
 
 
@@ -377,6 +402,7 @@ class Config:
         self._plugin_config = datasette.plugin_config("datasette-auth-tokens") or {}
         self._datasette = datasette
         self.enabled = self._plugin_config.get("manage_tokens")
+        self.max_expiry = self._plugin_config.get("max_expiry")
 
     def get(self, key):
         return self._plugin_config.get(key)
