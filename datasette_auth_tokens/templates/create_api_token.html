@@ -26,7 +26,7 @@ form div label {
 {% if token %}
   <div>
     <h2>Your API token</h2>
-    <form>
+    <form class="core">
       <input type="text" class="copyable" style="width: 40%" value="{{ token }}">
       <span class="copy-link-wrapper"></span>
     </form>
@@ -46,7 +46,7 @@ form div label {
   {% endfor %}
 {% endif %}
 
-<form action="{{ urls.path('-/api/tokens/create') }}" method="post">
+<form class="core" action="{{ urls.path('-/api/tokens/create') }}" method="post">
   <div>
     <div style="margin-bottom: 0.5em">
       <input type="text" name="description" placeholder="Optional token description" style="width: 40%">

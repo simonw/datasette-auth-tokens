@@ -38,7 +38,7 @@ dd {
 
 {% if token_status == "Active" and can_revoke %}
 <br>
-<form action="" method="POST">
+<form class="core" action="{{ request.path }}" method="POST">
     <p>
         <input type="hidden" name="csrftoken" value="{{ csrftoken() }}">
         <input type="submit" name="revoke" value="Revoke this token">
