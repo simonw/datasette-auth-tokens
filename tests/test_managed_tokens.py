@@ -1,6 +1,7 @@
 from datasette_test import Datasette
 from datasette.plugins import pm
 from datasette import hookimpl
+from datasette.permissions import PermissionSQL
 import pytest
 import pytest_asyncio
 import sqlite_utils
@@ -52,9 +53,13 @@ async def ds_managed_is_member(db_path):
         __name__ = "IsMemberPlugin"
 
         @hookimpl
-        def permission_allowed(self, datasette, actor, action):
-            if action == "auth-tokens-create":
-                return actor.get("is_member", False)
+        def permission_resources_sql(self, datasette, actor, action):
+            if (
+                action == "auth-tokens-create"
+                and actor
+                and actor.get("is_member", False)
+            ):
+                return PermissionSQL.allow(reason="is-member")
 
     pm.register(IsMemberPlugin(), name="undo_is_member_plugin")
     try:

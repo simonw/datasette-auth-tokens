@@ -1,4 +1,5 @@
-from datasette import hookimpl, Forbidden, Permission
+from datasette import hookimpl, Forbidden
+from datasette.permissions import Action
 import itsdangerous
 import json
 import secrets
@@ -78,32 +79,22 @@ def register_routes(datasette):
 
 
 @hookimpl
-def register_permissions():
+def register_actions(datasette):
     return [
-        Permission(
+        Action(
             name="auth-tokens-revoke-all",
             abbr=None,
             description="Revoke any API tokens",
-            takes_database=False,
-            takes_resource=False,
-            default=False,
         ),
-        Permission(
+        Action(
             name="auth-tokens-view-all",
             abbr=None,
             description="View all API tokens",
-            takes_database=False,
-            takes_resource=False,
-            default=False,
         ),
-        Permission(
+        Action(
             name="auth-tokens-create",
             abbr=None,
             description="Create API tokens",
-            takes_database=False,
-            takes_resource=False,
-            # If this was True anonymous users would be able to create tokens:
-            default=False,
         ),
     ]
 
