@@ -48,9 +48,9 @@ def format_permissions(datasette, permissions_dict):
     if not permissions_dict:
         return "All permissions"
     abbreviations = {}
-    for permission in datasette.permissions.values():
-        if permission.abbr:
-            abbreviations[permission.abbr] = permission.name
+    for action in datasette.actions.values():
+        if action.abbr:
+            abbreviations[action.abbr] = action.name
 
     output = []
 

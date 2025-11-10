@@ -1,4 +1,5 @@
 from datasette import Forbidden, Response, NotFound
+from datasette.resources import DatabaseResource, TableResource
 from datasette.utils import (
     tilde_encode,
     tilde_decode,
@@ -116,7 +117,7 @@ async def check_permission(datasette, actor):
         raise Forbidden(
             "You must be logged in as an actor with an ID to create a token"
         )
-    if not await datasette.permission_allowed(actor, "auth-tokens-create"):
+    if not await datasette.allowed(action="auth-tokens-create", actor=actor):
         raise Forbidden("You do not have permission to create a token")
 
 
@@ -133,8 +134,11 @@ async def _shared(datasette, request):
     for database in datasette.databases.values():
         if database.name in ("_internal", "_memory"):
             continue
-        if not await datasette.permission_allowed(
-            request.actor, "view-database", database.name
+        db_resource = DatabaseResource(database=database.name)
+        if not await datasette.allowed(
+            action="view-database",
+            resource=db_resource,
+            actor=request.actor,
         ):
             continue
         hidden_tables = await database.hidden_table_names()
@@ -142,10 +146,11 @@ async def _shared(datasette, request):
         for table in await database.table_names():
             if table in hidden_tables:
                 continue
-            if not await datasette.permission_allowed(
-                request.actor,
-                "view-table",
-                resource=(database.name, table),
+            table_resource = TableResource(database=database.name, table=table)
+            if not await datasette.allowed(
+                action="view-table",
+                resource=table_resource,
+                actor=request.actor,
             ):
                 continue
             tables.append({"name": table, "encoded": tilde_encode(table)})
@@ -162,7 +167,7 @@ async def _shared(datasette, request):
         "actor": request.actor,
         "all_permissions": [
             {"name": key, "description": value.description}
-            for key, value in datasette.permissions.items()
+            for key, value in datasette.actions.items()
             if key
             not in (
                 "auth-tokens-create",
@@ -173,13 +178,13 @@ async def _shared(datasette, request):
         ],
         "database_permissions": [
             {"name": key, "description": value.description}
-            for key, value in datasette.permissions.items()
-            if value.takes_database
+            for key, value in datasette.actions.items()
+            if value.takes_parent and not value.takes_child
         ],
         "resource_permissions": [
             {"name": key, "description": value.description}
-            for key, value in datasette.permissions.items()
-            if value.takes_resource
+            for key, value in datasette.actions.items()
+            if value.takes_child
         ],
         "database_with_tables": database_with_tables,
         "databases_with_at_least_one_table": databases_with_at_least_one_table,
@@ -206,7 +211,7 @@ async def tokens_index(datasette, request):
 
     # Users can only see their own tokens, unless they have the
     # auth-tokens-view-all permission
-    if not await datasette.permission_allowed(request.actor, "auth-tokens-view-all"):
+    if not await datasette.allowed(action="auth-tokens-view-all", actor=request.actor):
         where_bits.append("actor_id = :actor_id")
         params["actor_id"] = request.actor["id"] if request.actor else None
 
@@ -256,8 +261,9 @@ async def tokens_index(datasette, request):
                 "timestamp": _timestamp,
                 "ago_difference": ago_difference,
                 "format_permissions": _format_permissions,
-                "can_create_tokens": await datasette.permission_allowed(
-                    request.actor, "auth-tokens-create"
+                "can_create_tokens": await datasette.allowed(
+                    action="auth-tokens-create",
+                    actor=request.actor,
                 ),
             },
             request=request,
@@ -359,7 +365,7 @@ async def actor_can_view(datasette, actor, token_actor_id):
     if token_actor_id and str(token_actor_id) == str(actor.get("id")):
         return True
     # User with auth-tokens-view-all can view any token
-    return await datasette.permission_allowed(actor, "auth-tokens-view-all")
+    return await datasette.allowed(action="auth-tokens-view-all", actor=actor)
 
 
 async def actor_can_revoke(datasette, actor, token_actor_id):
@@ -369,7 +375,7 @@ async def actor_can_revoke(datasette, actor, token_actor_id):
     if token_actor_id and str(token_actor_id) == str(actor.get("id")):
         return True
     # User with auth-tokens-revoke-all can revoke any token
-    return await datasette.permission_allowed(actor, "auth-tokens-revoke-all")
+    return await datasette.allowed(action="auth-tokens-revoke-all", actor=actor)
 
 
 class Config:

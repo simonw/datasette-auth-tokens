@@ -29,7 +29,7 @@ setup(
     packages=["datasette_auth_tokens"],
     entry_points={"datasette": ["auth_tokens = datasette_auth_tokens"]},
     install_requires=[
-        "datasette>=1.0a8",
+        "datasette>=1.0a21",
         "sqlite-utils",
         "sqlite-migrate",
     ],
