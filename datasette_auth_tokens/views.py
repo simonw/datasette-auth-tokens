@@ -179,12 +179,12 @@ async def _shared(datasette, request):
         "database_permissions": [
             {"name": key, "description": value.description}
             for key, value in datasette.actions.items()
-            if value.resource_class and value.resource_class.parent_class is None
+            if value.takes_parent and not value.takes_child
         ],
         "resource_permissions": [
             {"name": key, "description": value.description}
             for key, value in datasette.actions.items()
-            if value.resource_class and value.resource_class.parent_class is not None
+            if value.takes_child
         ],
         "database_with_tables": database_with_tables,
         "databases_with_at_least_one_table": databases_with_at_least_one_table,
