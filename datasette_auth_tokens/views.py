@@ -1,5 +1,6 @@
 from datasette import Forbidden, Response, NotFound
 from datasette.resources import DatabaseResource, TableResource
+from datasette.tokens import TokenRestrictions
 from datasette.utils import (
     tilde_encode,
     tilde_decode,
@@ -47,34 +48,28 @@ async def create_api_token(request, datasette):
                     errors.append("Invalid expire duration unit")
 
         # Are there any restrictions?
-        restrict_all = []
-        restrict_database = {}
-        restrict_resource = {}
+        restrictions = TokenRestrictions()
 
         for key in post:
             if key.startswith("all:") and key.count(":") == 1:
-                restrict_all.append(key.split(":")[1])
+                restrictions.allow_all(key.split(":")[1])
             elif key.startswith("database:") and key.count(":") == 2:
                 bits = key.split(":")
                 database = tilde_decode(bits[1])
                 action = bits[2]
-                restrict_database.setdefault(database, []).append(action)
+                restrictions.allow_database(database, action)
             elif key.startswith("resource:") and key.count(":") == 3:
                 bits = key.split(":")
                 database = tilde_decode(bits[1])
                 resource = tilde_decode(bits[2])
                 action = bits[3]
-                restrict_resource.setdefault(database, {}).setdefault(
-                    resource, []
-                ).append(action)
+                restrictions.allow_resource(database, resource, action)
 
         # Reuse Datasette signed tokens mechanism to create parts of the token
-        throwaway_signed_token = datasette.create_token(
+        throwaway_signed_token = await datasette.create_token(
             request.actor["id"],
             expires_after=expires_after,
-            restrict_all=restrict_all,
-            restrict_database=restrict_database,
-            restrict_resource=restrict_resource,
+            restrictions=restrictions,
         )
         token_bits = datasette.unsign(
             throwaway_signed_token[len("dstok_") :], namespace="token"
