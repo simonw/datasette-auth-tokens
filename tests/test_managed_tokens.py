@@ -29,7 +29,7 @@ def db_path(tmp_path_factory):
 
 @pytest_asyncio.fixture
 async def ds_managed(db_path):
-    return Datasette(
+    ds = Datasette(
         [db_path],
         plugin_config={
             "datasette-auth-tokens": {
@@ -45,6 +45,8 @@ async def ds_managed(db_path):
             },
         },
     )
+    await ds.invoke_startup()
+    return ds
 
 
 @pytest_asyncio.fixture
@@ -226,7 +228,7 @@ async def test_create_token(
     assert response.status_code == 200
     assert f'<a href="tokens/{token_id}">1&nbsp;-&nbsp;Active</a>' in response.text
     if custom_actor_display:
-        assert "Root<br><span class=\"detail\">root</span>" in response.text
+        assert 'Root<br><span class="detail">root</span>' in response.text
     else:
         assert "<td>root</td>" in response.text
     # And should have its own page
@@ -445,3 +447,92 @@ async def test_no_table_heading_if_no_tables(tmpdir, has_a_table):
         assert fragment in response.text
     else:
         assert fragment not in response.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "permissions,actor_id,expected_present,expected_absent",
+    [
+        # Limited user: only view permissions granted explicitly
+        (
+            {
+                "view-table": {"id": "limited"},
+                "view-database": {"id": "limited"},
+            },
+            "limited",
+            ["name=\"all:view-table\"", "name=\"all:view-database\""],
+            ["name=\"all:insert-row\"", "name=\"all:alter-table\""],
+        ),
+        # Default permissions: authenticated user gets view + execute-sql but not write actions
+        (
+            {},
+            "root",
+            [
+                "name=\"all:view-table\"",
+                "name=\"all:execute-sql\"",
+                "name=\"database:demo:execute-sql\"",
+                "name=\"resource:demo:foo:view-table\"",
+            ],
+            ["name=\"all:insert-row\"", "name=\"all:delete-row\"", "name=\"all:create-table\""],
+        ),
+        # Database-level: user can execute-sql on demo but not create-table
+        (
+            {
+                "view-database": {"id": "dbuser"},
+                "view-table": {"id": "dbuser"},
+                "execute-sql": {"id": "dbuser"},
+            },
+            "dbuser",
+            ["name=\"database:demo:execute-sql\""],
+            ["name=\"database:demo:create-table\""],
+        ),
+        # Resource-level: user can view-table but not insert-row on demo/foo
+        (
+            {
+                "view-database": {"id": "viewer"},
+                "view-table": {"id": "viewer"},
+            },
+            "viewer",
+            ["name=\"resource:demo:foo:view-table\""],
+            ["name=\"resource:demo:foo:insert-row\""],
+        ),
+        # User with insert-row granted sees it at all levels
+        (
+            {
+                "view-database": {"id": "writer"},
+                "view-table": {"id": "writer"},
+                "insert-row": {"id": "writer"},
+            },
+            "writer",
+            [
+                "name=\"all:insert-row\"",
+                "name=\"resource:demo:foo:insert-row\"",
+            ],
+            ["name=\"all:delete-row\"", "name=\"resource:demo:foo:delete-row\""],
+        ),
+    ],
+    ids=[
+        "limited-user-global-actions",
+        "default-permissions",
+        "database-level-filtering",
+        "resource-level-filtering",
+        "write-permission-granted",
+    ],
+)
+async def test_create_token_form_only_shows_permitted_actions(
+    db_path, permissions, actor_id, expected_present, expected_absent
+):
+    permissions["auth-tokens-create"] = {"id": "*"}
+    ds = Datasette(
+        [db_path],
+        plugin_config={"datasette-auth-tokens": {"manage_tokens": True}},
+        config={"permissions": permissions},
+    )
+    cookie = ds.client.actor_cookie({"id": actor_id})
+    response = await ds.client.get("/-/api/tokens/create", cookies={"ds_actor": cookie})
+    assert response.status_code == 200
+    html = response.text
+    for fragment in expected_present:
+        assert fragment in html, f"Expected {fragment!r} to be present"
+    for fragment in expected_absent:
+        assert fragment not in html, f"Expected {fragment!r} to be absent"

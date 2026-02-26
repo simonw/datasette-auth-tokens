@@ -120,69 +120,96 @@ async def check_permission(datasette, actor):
 
 async def _shared(datasette, request):
     await check_permission(datasette, request.actor)
+    await datasette.refresh_schemas()
     db = Config(datasette).db
 
     tokens_exist = bool(
         (await db.execute("select 1 from _datasette_auth_tokens limit 1")).first()
     )
-    # Build list of databases and tables the user has permission to view
+    actor = request.actor
+
+    # Filter global permissions to only those the actor has
+    excluded_actions = {
+        "auth-tokens-create",
+        "auth-tokens-revoke-all",
+        "debug-menu",
+        "permissions-debug",
+    }
+    all_permissions = []
+    for key, value in datasette.actions.items():
+        if key in excluded_actions:
+            continue
+        if await datasette.allowed(action=key, actor=actor):
+            all_permissions.append({"name": key, "description": value.description})
+
+    # Use allowed_resources() to bulk-fetch which resources the actor
+    # can access for each action, avoiding per-resource allowed() calls
+    db_actions = {
+        key: value
+        for key, value in datasette.actions.items()
+        if value.takes_parent and not value.takes_child
+    }
+    db_allowed = {}
+    for key in db_actions:
+        result = await datasette.allowed_resources(key, actor)
+        db_allowed[key] = {r.parent async for r in result.all()}
+
+    resource_actions = {
+        key: value for key, value in datasette.actions.items() if value.takes_child
+    }
+    resource_allowed = {}
+    for key in resource_actions:
+        result = await datasette.allowed_resources(key, actor)
+        resource_allowed[key] = {(r.parent, r.child) async for r in result.all()}
+
+    # Build list of databases and tables the user has permission to view,
+    # along with the specific permissions they have for each
     database_with_tables = []
     databases_with_at_least_one_table = []
     for database in datasette.databases.values():
         if database.name in ("_internal", "_memory"):
             continue
-        db_resource = DatabaseResource(database=database.name)
-        if not await datasette.allowed(
-            action="view-database",
-            resource=db_resource,
-            actor=request.actor,
-        ):
+        if database.name not in db_allowed.get("view-database", set()):
             continue
+
+        db_permissions = [
+            {"name": key, "description": db_actions[key].description}
+            for key in db_actions
+            if database.name in db_allowed.get(key, set())
+        ]
+
         hidden_tables = await database.hidden_table_names()
         tables = []
         for table in await database.table_names():
             if table in hidden_tables:
                 continue
-            table_resource = TableResource(database=database.name, table=table)
-            if not await datasette.allowed(
-                action="view-table",
-                resource=table_resource,
-                actor=request.actor,
-            ):
+            if (database.name, table) not in resource_allowed.get("view-table", set()):
                 continue
-            tables.append({"name": table, "encoded": tilde_encode(table)})
+            table_permissions = [
+                {"name": key, "description": resource_actions[key].description}
+                for key in resource_actions
+                if (database.name, table) in resource_allowed.get(key, set())
+            ]
+            tables.append(
+                {
+                    "name": table,
+                    "encoded": tilde_encode(table),
+                    "permissions": table_permissions,
+                }
+            )
 
         db_info = {
             "name": database.name,
             "encoded": tilde_encode(database.name),
             "tables": tables,
+            "permissions": db_permissions,
         }
         database_with_tables.append(db_info)
         if tables:
             databases_with_at_least_one_table.append(db_info)
     return {
-        "actor": request.actor,
-        "all_permissions": [
-            {"name": key, "description": value.description}
-            for key, value in datasette.actions.items()
-            if key
-            not in (
-                "auth-tokens-create",
-                "auth-tokens-revoke-all",
-                "debug-menu",
-                "permissions-debug",
-            )
-        ],
-        "database_permissions": [
-            {"name": key, "description": value.description}
-            for key, value in datasette.actions.items()
-            if value.takes_parent and not value.takes_child
-        ],
-        "resource_permissions": [
-            {"name": key, "description": value.description}
-            for key, value in datasette.actions.items()
-            if value.takes_child
-        ],
+        "actor": actor,
+        "all_permissions": all_permissions,
         "database_with_tables": database_with_tables,
         "databases_with_at_least_one_table": databases_with_at_least_one_table,
         "tokens_exist": tokens_exist,

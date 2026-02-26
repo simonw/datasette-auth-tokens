@@ -73,23 +73,27 @@ form div label {
     </ul>
 
     {% for database in database_with_tables %}
+      {% if database.permissions %}
       <h2>All tables in "{{ database.name }}"</h2>
       <ul>
-        {% for permission in database_permissions %}
+        {% for permission in database.permissions %}
           <li><label><input type="checkbox" name="database:{{ database.encoded }}:{{ permission.name }}"> {{ permission.name }}</label> - {{ permission.description }}</li>
         {% endfor %}
       </ul>
+      {% endif %}
     {% endfor %}
     {% if databases_with_at_least_one_table %}
     <h2>Specific tables in specific databases</h2>
     {% for database in databases_with_at_least_one_table %}
       {% for table in database.tables %}
+        {% if table.permissions %}
         <h3>{{ database.name }}: {{ table.name }}</h3>
         <ul>
-          {% for permission in resource_permissions %}
+          {% for permission in table.permissions %}
             <li><label><input type="checkbox" name="resource:{{ database.encoded }}:{{ table.encoded }}:{{ permission.name }}"> {{ permission.name }}</label> - {{ permission.description }}</li>
           {% endfor %}
         </ul>
+        {% endif %}
       {% endfor %}
     {% endfor %}
     {% endif %}
