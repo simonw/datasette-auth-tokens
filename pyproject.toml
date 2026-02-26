@@ -1,6 +1,6 @@
 [project]
 name = "datasette-auth-tokens"
-version = "0.4a11"
+version = "0.4a12"
 description = "Datasette plugin for authenticating access using API tokens"
 readme = "README.md"
 authors = [{name = "Simon Willison"}]
