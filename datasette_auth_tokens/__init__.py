@@ -62,7 +62,7 @@ class ManagedTokenHandler(TokenHandler):
         return await _actor_from_managed(datasette, token)
 
 
-@hookimpl
+@hookimpl(tryfirst=True)
 def register_token_handler(datasette):
     config = Config(datasette)
     if not config.enabled:
