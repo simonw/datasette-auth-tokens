@@ -76,3 +76,34 @@ def format_permissions(datasette, permissions_dict):
                     output.append(f"- {abbreviations.get(code, code)}")
 
     return "\n".join(output)
+
+
+def abbreviate_restrictions(datasette, restrictions):
+    """Convert a TokenRestrictions object to the abbreviated dict format for storage."""
+    if restrictions is None:
+        return None
+    if not (restrictions.all or restrictions.database or restrictions.resource):
+        return None
+
+    def abbreviate_action(action):
+        action_obj = datasette.actions.get(action)
+        if not action_obj:
+            return action
+        return action_obj.abbr or action
+
+    result = {}
+    if restrictions.all:
+        result["a"] = [abbreviate_action(a) for a in restrictions.all]
+    if restrictions.database:
+        result["d"] = {
+            db: [abbreviate_action(a) for a in actions]
+            for db, actions in restrictions.database.items()
+        }
+    if restrictions.resource:
+        result["r"] = {}
+        for db, resources in restrictions.resource.items():
+            result["r"][db] = {
+                resource: [abbreviate_action(a) for a in actions]
+                for resource, actions in resources.items()
+            }
+    return result

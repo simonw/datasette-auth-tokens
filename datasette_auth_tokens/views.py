@@ -6,7 +6,7 @@ from datasette.utils import (
     tilde_decode,
     display_actor,
 )
-from .utils import ago_difference, format_permissions
+from .utils import ago_difference, format_permissions, abbreviate_restrictions
 import datetime
 import json
 import time
@@ -65,19 +65,11 @@ async def create_api_token(request, datasette):
                 action = bits[3]
                 restrictions.allow_resource(database, resource, action)
 
-        # Reuse Datasette signed tokens mechanism to create parts of the token
-        throwaway_signed_token = await datasette.create_token(
-            request.actor["id"],
-            expires_after=expires_after,
-            restrictions=restrictions,
-        )
-        token_bits = datasette.unsign(
-            throwaway_signed_token[len("dstok_") :], namespace="token"
-        )
-        permissions = token_bits.get("_r") or None
+        permissions = abbreviate_restrictions(datasette, restrictions)
 
         config = Config(datasette)
         db = config.db
+        description = post.get("description") or None
         cursor = await db.execute_write(
             """
             insert into _datasette_auth_tokens
@@ -88,13 +80,23 @@ async def create_api_token(request, datasette):
             {
                 "secret_version": 0,
                 "permissions": json.dumps(permissions),
-                "description": post.get("description") or None,
+                "description": description,
                 "actor_id": request.actor["id"],
                 "created_timestamp": int(time.time()),
                 "expires_after_seconds": expires_after,
             },
         )
         token = "dsatok_{}".format(datasette.sign(cursor.lastrowid, "dsatok"))
+
+        token_bits = {
+            "actor_id": request.actor["id"],
+        }
+        if permissions:
+            token_bits["permissions"] = permissions
+        if expires_after:
+            token_bits["expires_after_seconds"] = expires_after
+        if description:
+            token_bits["description"] = description
 
         context = await _shared(datasette, request)
         context.update({"errors": errors, "token": token, "token_bits": token_bits})
