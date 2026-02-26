@@ -8,8 +8,7 @@ migration = Migrations("datasette_auth_tokens")
 @migration()
 def m001_create_table(db):
     # If the table exists already, this will be a no-op
-    db.execute(
-        """
+    db.execute("""
     CREATE TABLE IF NOT EXISTS _datasette_auth_tokens (
         id INTEGER PRIMARY KEY,
         token_status TEXT DEFAULT 'A', -- [A]ctive, [R]evoked, [E]xpired
@@ -21,8 +20,7 @@ def m001_create_table(db):
         expires_after_seconds INTEGER,
         secret_version INTEGER DEFAULT 0
     );
-    """
-    )
+    """)
 
 
 @migration()
@@ -30,13 +28,11 @@ def m002_rename_live_to_active(db):
     # In case anything is left over - I made this change before
     # I introduced migrations
     db["_datasette_auth_tokens"].transform(defaults={"token_status": "A"})
-    db.query(
-        """
+    db.query("""
         update _datasette_auth_tokens
         set token_status = 'A'
         where token_status = 'L'
-        """
-    )
+        """)
 
 
 @migration()
@@ -63,10 +59,8 @@ def m003_add_ended_timestamp(db):
         {"now": int(time.time())},
     )
     # Set it to created_timestamp + expires_after_seconds for any expired tokens
-    db.query(
-        """
+    db.query("""
         update _datasette_auth_tokens
         set ended_timestamp = created_timestamp + expires_after_seconds
         where token_status = 'E'
-        """
-    )
+        """)

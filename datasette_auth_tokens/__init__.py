@@ -222,9 +222,7 @@ def make_expire_function(token_id=None):
                 update _datasette_auth_tokens
                 set token_status = 'E', ended_timestamp = :now
                 where {where}
-            """.format(
-                    where=" and ".join(where_bits)
-                ),
+            """.format(where=" and ".join(where_bits)),
                 {"now": int(time.time()), "token_id": token_id},
             )
 
