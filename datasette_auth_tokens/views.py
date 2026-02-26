@@ -246,7 +246,7 @@ async def tokens_index(datasette, request):
         token["actor_display"] = display_actor(actor) if actor else None
 
     def _format_permissions(json_string):
-        return format_permissions(datasette, json.loads(json_string))
+        return format_permissions(datasette, json.loads(json_string), html=True)
 
     return Response.html(
         await datasette.render_template(
@@ -350,7 +350,7 @@ async def token_details(request, datasette):
 
 def _timestamp(ts):
     if ts:
-        return datetime.datetime.fromtimestamp(ts).isoformat()
+        return datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
     else:
         return ""
 

@@ -44,13 +44,16 @@ def ago_difference(time1: int, time2: Optional[int] = None):
         return "{} ago".format(combined)
 
 
-def format_permissions(datasette, permissions_dict):
+def format_permissions(datasette, permissions_dict, html=False):
     if not permissions_dict:
         return "All permissions"
     abbreviations = {}
     for action in datasette.actions.values():
         if action.abbr:
             abbreviations[action.abbr] = action.name
+
+    if html:
+        return _format_permissions_html(permissions_dict, abbreviations)
 
     output = []
 
@@ -76,6 +79,33 @@ def format_permissions(datasette, permissions_dict):
                     output.append(f"- {abbreviations.get(code, code)}")
 
     return "\n".join(output)
+
+
+def _format_permissions_html(permissions_dict, abbreviations):
+    from markupsafe import Markup
+
+    parts = []
+
+    def _render_group(label, codes):
+        items = "".join(f"<li>{abbreviations.get(c, c)}</li>" for c in codes)
+        parts.append(
+            f'<span class="permissions-group">{label}</span>'
+            f'<ul class="permissions-list">{items}</ul>'
+        )
+
+    if "a" in permissions_dict:
+        _render_group("All databases", permissions_dict["a"])
+
+    if "d" in permissions_dict:
+        for db, codes in permissions_dict["d"].items():
+            _render_group(f"Database: {db}", codes)
+
+    if "r" in permissions_dict:
+        for db, tables in permissions_dict["r"].items():
+            for table, codes in tables.items():
+                _render_group(f"Table: {db}/{table}", codes)
+
+    return Markup("".join(parts))
 
 
 def abbreviate_restrictions(datasette, restrictions):

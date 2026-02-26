@@ -16,6 +16,28 @@ tr.token-E {
   /* Expired */
   background-color: rgb(253, 255, 221);
 }
+.tokens-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.tokens-table th, .tokens-table td {
+  padding: 0.4em 0.8em;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid #e0e0e0;
+}
+.tokens-table th {
+  border-bottom: 2px solid #ccc;
+}
+.permissions-list {
+  margin: 0;
+  padding: 0 0 0 1.2em;
+  font-size: 0.9em;
+}
+.permissions-group {
+  font-weight: bold;
+  font-size: 0.9em;
+}
 </style>
 {% endblock %}
 
@@ -30,7 +52,7 @@ tr.token-E {
 {% endif %}
 
 {% if tokens %}
-<table>
+<table class="tokens-table">
 <tr>
   <th>Token</th>
   <th>Actor</th>
@@ -43,12 +65,12 @@ tr.token-E {
 {% for token in tokens %}
 <tr class="token-{{ token.token_status }}">
   <td><a href="tokens/{{ token.id }}">{{ token.id }}&nbsp;-&nbsp;{{ token.status }}</a>{% if token.description %}<br><span class="detail">{{ token.description }}</span>{% endif %}</td>
-  <td>{% if token.actor_display %}{{ token.actor_display }} ({{ token.actor_id }}){% else %}{{ token.actor_id }}{% endif %}</td>
+  <td>{% if token.actor_display %}{{ token.actor_display }}<br><span class="detail">{{ token.actor_id }}</span>{% else %}{{ token.actor_id }}{% endif %}</td>
   <td>{{ format_permissions(token.permissions) }}</td>
-  <td>{{ timestamp(token.created_timestamp) }}<br><span class="detail">{{ ago_difference(token.created_timestamp) }}</span></td>
-  <td>{{ timestamp(token.last_used_timestamp) }}<br><span class="detail">{{ ago_difference(token.last_used_timestamp) }}</span></td>
-  <td>{% if token.expires_after_seconds %}{{ timestamp(token.created_timestamp + token.expires_after_seconds) }}<br><span class="detail">{{ ago_difference(token.created_timestamp + token.expires_after_seconds) }}{% endif %}</td>
-  <td>{{ timestamp(token.ended_timestamp) }}<br><span class="detail">{{ ago_difference(token.ended_timestamp) }}</span></td>
+  <td>{{ timestamp(token.created_timestamp) }}{% if token.created_timestamp %}<br><span class="detail">{{ ago_difference(token.created_timestamp) }}</span>{% endif %}</td>
+  <td>{% if token.last_used_timestamp %}{{ timestamp(token.last_used_timestamp) }}<br><span class="detail">{{ ago_difference(token.last_used_timestamp) }}</span>{% endif %}</td>
+  <td>{% if token.expires_after_seconds %}{{ timestamp(token.created_timestamp + token.expires_after_seconds) }}<br><span class="detail">{{ ago_difference(token.created_timestamp + token.expires_after_seconds) }}</span>{% endif %}</td>
+  <td>{% if token.ended_timestamp %}{{ timestamp(token.ended_timestamp) }}<br><span class="detail">{{ ago_difference(token.ended_timestamp) }}</span>{% endif %}</td>
 </tr>
 {% endfor %}
 </table>
