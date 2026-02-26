@@ -1,4 +1,4 @@
-from datasette import hookimpl, Forbidden
+from datasette import hookimpl, Forbidden, Response
 from datasette.permissions import Action
 from datasette.tokens import TokenHandler
 import itsdangerous
@@ -114,11 +114,26 @@ def startup(datasette):
     return inner
 
 
+DOCS_URL = "https://github.com/simonw/datasette-auth-tokens/blob/main/README.md#managed-tokens-mode"
+
+
+async def manage_tokens_not_enabled(request, datasette):
+    return Response.text(
+        "Token management is not enabled. "
+        "Enable it by setting the manage_tokens plugin option:\n\n"
+        "  -s plugins.datasette-auth-tokens.manage_tokens true\n\n"
+        "See documentation: " + DOCS_URL + "\n",
+        status=400,
+    )
+
+
 @hookimpl
 def register_routes(datasette):
     config = Config(datasette)
     if not config.enabled:
-        return
+        return [
+            (r"^/-/api/tokens(?:/.*)?$", manage_tokens_not_enabled),
+        ]
     return [
         (r"^/-/api/tokens/create$", create_api_token),
         (r"^/-/api/tokens$", tokens_index),
