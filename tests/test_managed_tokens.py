@@ -226,7 +226,7 @@ async def test_create_token(
     assert response.status_code == 200
     assert f'<a href="tokens/{token_id}">1&nbsp;-&nbsp;Active</a>' in response.text
     if custom_actor_display:
-        assert "<td>Root (root)</td>" in response.text
+        assert "Root<br><span class=\"detail\">root</span>" in response.text
     else:
         assert "<td>root</td>" in response.text
     # And should have its own page
