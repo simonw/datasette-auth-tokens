@@ -269,7 +269,7 @@ Enable it using the `param` config value:
           },
           "actor": {
             "bot_id": "my-bot"
-          },
+          }
         }
       ],
       "param": "_auth_token"
