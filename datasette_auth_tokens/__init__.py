@@ -1,5 +1,6 @@
-from datasette import hookimpl, Forbidden
+from datasette import hookimpl, Forbidden, Response
 from datasette.permissions import Action
+from datasette.tokens import TokenHandler
 import itsdangerous
 import json
 import secrets
@@ -13,6 +14,7 @@ from .views import (
     token_details,
     Config,
 )
+from .utils import abbreviate_restrictions
 from .migrations import migration
 
 TOKEN_STATUSES = {
@@ -20,6 +22,52 @@ TOKEN_STATUSES = {
     "R": "Revoked",
     "E": "Expired",
 }
+
+
+class ManagedTokenHandler(TokenHandler):
+    """Token handler for database-backed managed tokens (dsatok_ prefix)."""
+
+    name = "dsatok"
+
+    async def create_token(
+        self, datasette, actor_id, *, expires_after=None, restrictions=None
+    ):
+        config = Config(datasette)
+        db = config.db
+
+        permissions = abbreviate_restrictions(datasette, restrictions)
+
+        cursor = await db.execute_write(
+            """
+            insert into _datasette_auth_tokens
+            (secret_version, description, permissions, actor_id, created_timestamp, expires_after_seconds)
+            values
+            (:secret_version, :description, :permissions, :actor_id, :created_timestamp, :expires_after_seconds)
+        """,
+            {
+                "secret_version": 0,
+                "permissions": json.dumps(permissions),
+                "description": None,
+                "actor_id": actor_id,
+                "created_timestamp": int(time.time()),
+                "expires_after_seconds": expires_after,
+            },
+        )
+        return "dsatok_{}".format(datasette.sign(cursor.lastrowid, "dsatok"))
+
+    async def verify_token(self, datasette, token):
+        config = Config(datasette)
+        if not config.enabled:
+            return None
+        return await _actor_from_managed(datasette, token)
+
+
+@hookimpl(tryfirst=True)
+def register_token_handler(datasette):
+    config = Config(datasette)
+    if not config.enabled:
+        return None
+    return ManagedTokenHandler()
 
 
 @hookimpl
@@ -66,11 +114,26 @@ def startup(datasette):
     return inner
 
 
+DOCS_URL = "https://github.com/simonw/datasette-auth-tokens/blob/main/README.md#managed-tokens-mode"
+
+
+async def manage_tokens_not_enabled(request, datasette):
+    return Response.text(
+        "Token management is not enabled. "
+        "Enable it by setting the manage_tokens plugin option:\n\n"
+        "  -s plugins.datasette-auth-tokens.manage_tokens true\n\n"
+        "See documentation: " + DOCS_URL + "\n",
+        status=400,
+    )
+
+
 @hookimpl
 def register_routes(datasette):
     config = Config(datasette)
     if not config.enabled:
-        return
+        return [
+            (r"^/-/api/tokens(?:/.*)?$", manage_tokens_not_enabled),
+        ]
     return [
         (r"^/-/api/tokens/create$", create_api_token),
         (r"^/-/api/tokens$", tokens_index),
@@ -120,7 +183,13 @@ def actor_from_request(datasette, request):
             return None
 
         if config.enabled:
-            return await _actor_from_managed(datasette, incoming_token)
+            # For Bearer tokens, return None so Datasette's built-in
+            # actor_from_request handles it via verify_token() and our
+            # ManagedTokenHandler.
+            if authorization:
+                return None
+            # For query param tokens, delegate to verify_token() directly
+            return await datasette.verify_token(incoming_token)
 
         # First try hard-coded tokens in the list
         for token in allowed_tokens:
