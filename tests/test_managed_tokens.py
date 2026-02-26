@@ -460,20 +460,24 @@ async def test_no_table_heading_if_no_tables(tmpdir, has_a_table):
                 "view-database": {"id": "limited"},
             },
             "limited",
-            ["name=\"all:view-table\"", "name=\"all:view-database\""],
-            ["name=\"all:insert-row\"", "name=\"all:alter-table\""],
+            ['name="all:view-table"', 'name="all:view-database"'],
+            ['name="all:insert-row"', 'name="all:alter-table"'],
         ),
         # Default permissions: authenticated user gets view + execute-sql but not write actions
         (
             {},
             "root",
             [
-                "name=\"all:view-table\"",
-                "name=\"all:execute-sql\"",
-                "name=\"database:demo:execute-sql\"",
-                "name=\"resource:demo:foo:view-table\"",
+                'name="all:view-table"',
+                'name="all:execute-sql"',
+                'name="database:demo:execute-sql"',
+                'name="resource:demo:foo:view-table"',
             ],
-            ["name=\"all:insert-row\"", "name=\"all:delete-row\"", "name=\"all:create-table\""],
+            [
+                'name="all:insert-row"',
+                'name="all:delete-row"',
+                'name="all:create-table"',
+            ],
         ),
         # Database-level: user can execute-sql on demo but not create-table
         (
@@ -483,8 +487,8 @@ async def test_no_table_heading_if_no_tables(tmpdir, has_a_table):
                 "execute-sql": {"id": "dbuser"},
             },
             "dbuser",
-            ["name=\"database:demo:execute-sql\""],
-            ["name=\"database:demo:create-table\""],
+            ['name="database:demo:execute-sql"'],
+            ['name="database:demo:create-table"'],
         ),
         # Resource-level: user can view-table but not insert-row on demo/foo
         (
@@ -493,8 +497,8 @@ async def test_no_table_heading_if_no_tables(tmpdir, has_a_table):
                 "view-table": {"id": "viewer"},
             },
             "viewer",
-            ["name=\"resource:demo:foo:view-table\""],
-            ["name=\"resource:demo:foo:insert-row\""],
+            ['name="resource:demo:foo:view-table"'],
+            ['name="resource:demo:foo:insert-row"'],
         ),
         # User with insert-row granted sees it at all levels
         (
@@ -505,10 +509,10 @@ async def test_no_table_heading_if_no_tables(tmpdir, has_a_table):
             },
             "writer",
             [
-                "name=\"all:insert-row\"",
-                "name=\"resource:demo:foo:insert-row\"",
+                'name="all:insert-row"',
+                'name="resource:demo:foo:insert-row"',
             ],
-            ["name=\"all:delete-row\"", "name=\"resource:demo:foo:delete-row\""],
+            ['name="all:delete-row"', 'name="resource:demo:foo:delete-row"'],
         ),
     ],
     ids=[
