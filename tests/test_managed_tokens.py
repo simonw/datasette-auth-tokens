@@ -166,6 +166,10 @@ async def _create_token(ds_managed, actor_id="root"):
             {"resource:demo:foo:view-table": "1"},
             {"id": "root", "token": "dsatok", "_r": {"r": {"demo": {"foo": ["vt"]}}}},
         ),
+        (
+            {"database:demo:insert-row": "1"},
+            {"id": "root", "token": "dsatok", "_r": {"d": {"demo": ["ir"]}}},
+        ),
     ],
 )
 @pytest.mark.parametrize("database", (None, "api"))
@@ -415,6 +419,32 @@ async def test_tokens_cannot_be_restricted_to_auth_tokens_revoke_all(ds_managed)
         "/-/api/tokens/create", cookies={"ds_actor": root_cookie}
     )
     assert "auth-tokens-revoke-all" not in create_page.text
+
+
+@pytest.mark.asyncio
+async def test_table_level_permissions_shown_under_database_heading(ds_managed):
+    # Issue: table-level actions (e.g. insert-row) should be available as
+    # checkboxes under each database heading so a token can be restricted to
+    # insert-row across every table in that database.
+    cookie = ds_managed.client.actor_cookie({"id": "root"})
+    response = await ds_managed.client.get(
+        "/-/api/tokens/create", cookies={"ds_actor": cookie}
+    )
+    assert response.status_code == 200
+    # The "All tables in" heading should exist for the demo database
+    assert 'All tables in "demo"' in response.text
+    # Table-level permissions should render as database-scoped checkboxes
+    for action in (
+        "insert-row",
+        "update-row",
+        "delete-row",
+        "view-table",
+        "alter-table",
+        "drop-table",
+    ):
+        assert (
+            f'name="database:demo:{action}"' in response.text
+        ), f"Expected database-scoped checkbox for {action}"
 
 
 @pytest.mark.asyncio
