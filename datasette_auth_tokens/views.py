@@ -70,6 +70,7 @@ async def create_api_token(request, datasette):
             request.actor["id"],
             expires_after=expires_after,
             restrictions=restrictions,
+            handler="signed",
         )
         token_bits = datasette.unsign(
             throwaway_signed_token[len("dstok_") :], namespace="token"

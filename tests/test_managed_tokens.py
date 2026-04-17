@@ -101,6 +101,47 @@ async def ds_api_db(tmp_path_factory):
     )
 
 
+@pytest.mark.asyncio
+async def test_register_token_handler(ds_managed):
+    """The plugin registers a ManagedTokenHandler with name='dsatok'."""
+    handlers = ds_managed._token_handlers()
+    names = [h.name for h in handlers]
+    assert "dsatok" in names
+
+
+@pytest.mark.asyncio
+async def test_register_token_handler_disabled():
+    """No handler is registered when manage_tokens is off."""
+    ds = Datasette(memory=True)
+    await ds.invoke_startup()
+    handlers = ds._token_handlers()
+    names = [h.name for h in handlers]
+    assert "dsatok" not in names
+
+
+@pytest.mark.asyncio
+async def test_verify_token_via_datasette(ds_managed):
+    """datasette.verify_token() resolves a dsatok_ token to the token actor."""
+    token_id, token = await _create_token(ds_managed)
+    actor = await ds_managed.verify_token(token)
+    assert actor == {"id": "root", "token": "dsatok", "token_id": token_id}
+
+
+@pytest.mark.asyncio
+async def test_verify_token_rejects_bogus(ds_managed):
+    """A bogus dsatok_ token returns None from datasette.verify_token()."""
+    actor = await ds_managed.verify_token("dsatok_bad-token")
+    assert actor is None
+
+
+@pytest.mark.asyncio
+async def test_verify_token_ignores_non_dsatok(ds_managed):
+    """The dsatok handler returns None for non-dsatok_ tokens."""
+    handler = next(h for h in ds_managed._token_handlers() if h.name == "dsatok")
+    result = await handler.verify_token(ds_managed, "dstok_something-else")
+    assert result is None
+
+
 @pytest.mark.parametrize("status", ("active", "revoked", "expired", "invalid"))
 @pytest.mark.parametrize("database", (None, "api"))
 @pytest.mark.asyncio
