@@ -13,6 +13,79 @@ Install this plugin in the same environment as Datasette.
 ```bash
 datasette install datasette-auth-tokens
 ```
+## Managed tokens mode
+
+`datasette-auth-tokens` provides a managed tokens mode, where tokens are stored in a SQLite database table and the plugin provides an interface for creating and revoking tokens.
+
+To turn this mode on, add `"manage_tokens": true` to your plugin configuration:
+
+```json
+{
+    "plugins": {
+        "datasette-auth-tokens": {
+            "manage_tokens": true
+        }
+    }
+}
+```
+This will add a "Create API token" option to the Datasette menu.
+
+Tokens that are created will be kept in a new `_datasette_auth_tokens` table.
+
+Users need the `auth-tokens-create` permission to create tokens. One way to grant that is to add this `"permissions"` block to your configuration:
+
+```json
+{
+    "permissions": {
+        "auth-tokens-create": {
+            "id": "*"
+        }
+    }
+}
+```
+
+Use the "Create API token" option in the Datasette menu or navigate to `/-/api/tokens` to create tokens and manage tokens.
+
+When you create a new token a signed token string will be presented to you. You need to store this, as it is not stored directly in the database table and can only be retrieved once.
+
+If you have multiple databases attached to Datasette you will need to specify which database should be used for the `_datasette_auth_tokens` table. You can do this with the `manage_tokens_database` setting:
+
+```json
+{
+    "plugins": {
+        "datasette-auth-tokens": {
+            "manage_tokens": true,
+            "manage_tokens_database": "tokens"
+        }
+    }
+}
+```
+Now start Datasette like this:
+```bash
+datasette -c config.json mydb.db tokens.db --create
+```
+The `--create` option can be used to tell Datasette to create the `tokens.db` database file if it does not already exist.
+
+In Datasette 1.0 you can instead use the `-s` option like this:
+```bash
+datasette \
+  -s plugins.datasette-auth-tokens.manage_tokens true \
+  -s plugins.datasette-auth-tokens.manage_tokens_database tokens \
+  -s permissions.auth-tokens-create.id '*' # to enable token creation
+```
+
+### Viewing tokens
+
+By default, users can only view tokens that they themselves have created on the `/-/api/tokens` page.
+
+Grant the `auth-tokens-view-all` permission to allow a user to view all tokens, even those created by other users.
+
+### Revoking tokens
+
+A token can be revoked by the user that created it by clicking the "Revoke this token" button at the bottom of the token page that is linked to from `/-/api/tokens`.
+
+A user with the `auth-tokens-revoke-all` permission can revoke any token.
+
 ## Hard-coded tokens
 
 Read about Datasette's [authentication and permissions system](https://datasette.readthedocs.io/en/latest/authentication.html).
@@ -124,78 +197,6 @@ curl http://127.0.0.1:8001/:memory:/show_version.json?_shape=array&_auth_token=t
 ```json
 [{"sqlite_version()": "3.31.1"}]
 ```
-## Managed tokens mode
-
-`datasette-auth-tokens` provides a managed tokens mode, where tokens are stored in a SQLite database table and the plugin provides an interface for creating and revoking tokens.
-
-To turn this mode on, add `"manage_tokens": true` to your plugin configuration:
-
-```json
-{
-    "plugins": {
-        "datasette-auth-tokens": {
-            "manage_tokens": true
-        }
-    }
-}
-```
-This will add a "Create API token" option to the Datasette menu.
-
-Tokens that are created will be kept in a new `_datasette_auth_tokens` table.
-
-Users need the `auth-tokens-create` permission to create tokens. One way to grant that is to add this `"permissions"` block to your configuration:
-
-```json
-{
-    "permissions": {
-        "auth-tokens-create": {
-            "id": "*"
-        }
-    }
-}
-```
-
-Use the "Create API token" option in the Datasette menu or navigate to `/-/api/tokens` to create tokens and manage tokens.
-
-When you create a new token a signed token string will be presented to you. You need to store this, as it is not stored directly in the database table and can only be retrieved once.
-
-If you have multiple databases attached to Datasette you will need to specify which database should be used for the `_datasette_auth_tokens` table. You can do this with the `manage_tokens_database` setting:
-
-```json
-{
-    "plugins": {
-        "datasette-auth-tokens": {
-            "manage_tokens": true,
-            "manage_tokens_database": "tokens"
-        }
-    }
-}
-```
-Now start Datasette like this:
-```bash
-datasette -c config.json mydb.db tokens.db --create
-```
-The `--create` option can be used to tell Datasette to create the `tokens.db` database file if it does not already exist.
-
-In Datasette 1.0 you can instead use the `-s` option like this:
-```bash
-datasette \
-  -s plugins.datasette-auth-tokens.manage_tokens true \
-  -s plugins.datasette-auth-tokens.manage_tokens_database tokens \
-  -s permissions.auth-tokens-create.id '*' # to enable token creation
-```
-
-### Viewing tokens
-
-By default, users can only view tokens that they themselves have created on the `/-/api/tokens` page.
-
-Grant the `auth-tokens-view-all` permission to allow a user to view all tokens, even those created by other users.
-
-### Revoking tokens
-
-A token can be revoked by the user that created it by clicking the "Revoke this token" button at the bottom of the token page that is linked to from `/-/api/tokens`.
-
-A user with the `auth-tokens-revoke-all` permission can revoke any token.
 
 ## Custom tokens from your database
 
@@ -257,3 +258,19 @@ If you implement the custom pattern above which reads `token_secret` from your o
 To avoid this, you should lock down access to that table. The configuration example above shows how to do this using an `"allow": false` block to deny all access to that `tokens` database.
 
 Consult Datasette's [Permissions documentation](https://datasette.readthedocs.io/en/stable/authentication.html#permissions) for more information about how to lock down this kind of access.
+
+## Development
+
+The recommended way to develop this plugin uses [uv](https://github.com/astral-sh/uv). To run the tests:
+```bash
+cd datasette-auth-tokens
+uv run pytest
+```
+To run a development server with managed tokens mode enabled:
+```bash
+uv run datasette data.db --create --root \
+  -s plugins.datasette-auth-tokens.manage_tokens true \
+  -s permissions.auth-tokens-create.id '*' \
+  --internal internal.db --reload
+```
+Click the link to sign in as root and then visit http://127.0.0.1:8001/-/api/tokens/create
