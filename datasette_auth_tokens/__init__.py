@@ -1,5 +1,6 @@
 from datasette import hookimpl, Forbidden
 from datasette.permissions import Action
+from datasette.tokens import TokenHandler
 import itsdangerous
 import json
 import secrets
@@ -20,6 +21,82 @@ TOKEN_STATUSES = {
     "R": "Revoked",
     "E": "Expired",
 }
+
+
+# TODO: replace with TokenRestrictions.abbreviated(datasette) once that method
+# ships in a Datasette release. https://github.com/simonw/datasette/issues/2695
+def _abbreviate_restrictions(datasette, restrictions):
+    """Return the abbreviated _r dict for a TokenRestrictions, or None if empty."""
+    if restrictions is None:
+        return None
+    if not (restrictions.all or restrictions.database or restrictions.resource):
+        return None
+
+    def abbr(action):
+        action_obj = datasette.actions.get(action)
+        if not action_obj:
+            return action
+        return action_obj.abbr or action
+
+    out = {}
+    if restrictions.all:
+        out["a"] = [abbr(a) for a in restrictions.all]
+    if restrictions.database:
+        out["d"] = {
+            database: [abbr(a) for a in actions]
+            for database, actions in restrictions.database.items()
+        }
+    if restrictions.resource:
+        out["r"] = {}
+        for database, resources in restrictions.resource.items():
+            for resource, actions in resources.items():
+                out["r"].setdefault(database, {})[resource] = [abbr(a) for a in actions]
+    return out
+
+
+class ManagedTokenHandler(TokenHandler):
+    """Token handler for database-backed managed tokens (dsatok_ prefix)."""
+
+    name = "dsatok"
+
+    async def create_token(
+        self, datasette, actor_id, *, expires_after=None, restrictions=None
+    ):
+        permissions = _abbreviate_restrictions(datasette, restrictions)
+
+        config = Config(datasette)
+        db = config.db
+        cursor = await db.execute_write(
+            """
+            insert into _datasette_auth_tokens
+            (secret_version, description, permissions, actor_id, created_timestamp, expires_after_seconds)
+            values
+            (:secret_version, :description, :permissions, :actor_id, :created_timestamp, :expires_after_seconds)
+        """,
+            {
+                "secret_version": 0,
+                "permissions": json.dumps(permissions),
+                "description": None,
+                "actor_id": actor_id,
+                "created_timestamp": int(time.time()),
+                "expires_after_seconds": expires_after,
+            },
+        )
+        return "dsatok_{}".format(datasette.sign(cursor.lastrowid, "dsatok"))
+
+    async def verify_token(self, datasette, token):
+        config = Config(datasette)
+        if not config.enabled:
+            return None
+        return await _actor_from_managed(datasette, token)
+
+
+@hookimpl(tryfirst=True)
+def register_token_handler(datasette):
+    config = Config(datasette)
+    if not config.enabled:
+        return None
+    return ManagedTokenHandler()
 
 
 @hookimpl
@@ -120,7 +197,13 @@ def actor_from_request(datasette, request):
             return None
 
         if config.enabled:
-            return await _actor_from_managed(datasette, incoming_token)
+            # For Bearer tokens, return None so Datasette's built-in
+            # actor_from_request handles it via verify_token() and our
+            # ManagedTokenHandler.
+            if authorization:
+                return None
+            # For query-param tokens, delegate to verify_token() directly.
+            return await datasette.verify_token(incoming_token)
 
         # First try hard-coded tokens in the list
         for token in allowed_tokens:
