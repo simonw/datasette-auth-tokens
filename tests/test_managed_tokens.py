@@ -141,13 +141,11 @@ async def _create_token(ds_managed, actor_id="root"):
     create_page = await ds_managed.client.get(
         "/-/api/tokens/create", cookies={"ds_actor": root_cookie}
     )
-    ds_csrftoken = create_page.cookies["ds_csrftoken"]
-    post_fields = {}
-    post_fields["csrftoken"] = ds_csrftoken
+    assert create_page.status_code == 200
     response = await ds_managed.client.post(
         "/-/api/tokens/create",
-        data=post_fields,
-        cookies={"ds_actor": root_cookie, "ds_csrftoken": ds_csrftoken},
+        data={},
+        cookies={"ds_actor": root_cookie},
     )
     assert response.status_code == 200
     api_token = response.text.split('class="copyable" style="width: 40%" value="')[
@@ -201,14 +199,10 @@ async def test_create_token(
         "/-/api/tokens/create", cookies={"ds_actor": cookie}
     )
     assert create_page.status_code == 200
-    # Extract ds_csrftoken
-    ds_csrftoken = create_page.cookies["ds_csrftoken"]
-    # Use that to create the token
-    post_fields["csrftoken"] = ds_csrftoken
     response = await ds_managed.client.post(
         "/-/api/tokens/create",
         data=post_fields,
-        cookies={"ds_actor": cookie, "ds_csrftoken": ds_csrftoken},
+        cookies={"ds_actor": cookie},
     )
     assert response.status_code == 200
     api_token = response.text.split('class="copyable" style="width: 40%" value="')[
@@ -255,11 +249,6 @@ async def test_create_token_permissions(ds_managed_is_member, is_member):
         assert 'href="tokens/create"' in list_page.text
     else:
         assert 'href="tokens/create"' not in list_page.text
-    # We always get CSRF token from /-/permissions
-    csrftoken = (
-        await ds_managed_is_member.client.get("/-/permissions", cookies=cookies)
-    ).cookies["ds_csrftoken"]
-    cookies["ds_csrftoken"] = csrftoken
     create_page = await ds_managed_is_member.client.get(
         "/-/api/tokens/create", cookies=cookies
     )
@@ -270,7 +259,7 @@ async def test_create_token_permissions(ds_managed_is_member, is_member):
     # Now try a POST to create a token
     response = await ds_managed_is_member.client.post(
         "/-/api/tokens/create",
-        data={"csrftoken": csrftoken},
+        data={},
         cookies=cookies,
     )
     if is_member:
@@ -315,14 +304,10 @@ async def test_token_permissions(
         "/-/api/tokens/{}".format(token_id), cookies=cookies
     )
 
-    csrftoken = "-"
-
     if not should_allow_view:
         assert response.status_code == 403
     else:
         assert response.status_code == 200
-        csrftoken = response.cookies["ds_csrftoken"]
-        cookies["ds_csrftoken"] = csrftoken
         # Is the revoke button present?
         if should_allow_revoke:
             assert 'name="revoke"' in response.text
@@ -332,7 +317,7 @@ async def test_token_permissions(
     # Now try to revoke it
     revoke_response = await ds_managed.client.post(
         "/-/api/tokens/{}".format(token_id),
-        data={"revoke": "1", "csrftoken": csrftoken},
+        data={"revoke": "1"},
         cookies=cookies,
     )
 
