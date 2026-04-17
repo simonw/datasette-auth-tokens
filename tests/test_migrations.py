@@ -41,7 +41,7 @@ def test_migrate_from_original():
 
     assert get_col().default_value == "'L'"
     migration.apply(db)
-    assert db["_datasette_auth_tokens"].columns_dict["ended_timestamp"] == int
+    assert db["_datasette_auth_tokens"].columns_dict["ended_timestamp"] is int
     # Should have updated token default
     assert get_col().default_value == "'A'"
     # Confirm column order is correct

@@ -23,6 +23,37 @@ TOKEN_STATUSES = {
 }
 
 
+# TODO: replace with TokenRestrictions.abbreviated(datasette) once that method
+# ships in a Datasette release. https://github.com/simonw/datasette/issues/2695
+def _abbreviate_restrictions(datasette, restrictions):
+    """Return the abbreviated _r dict for a TokenRestrictions, or None if empty."""
+    if restrictions is None:
+        return None
+    if not (restrictions.all or restrictions.database or restrictions.resource):
+        return None
+
+    def abbr(action):
+        action_obj = datasette.actions.get(action)
+        if not action_obj:
+            return action
+        return action_obj.abbr or action
+
+    out = {}
+    if restrictions.all:
+        out["a"] = [abbr(a) for a in restrictions.all]
+    if restrictions.database:
+        out["d"] = {
+            database: [abbr(a) for a in actions]
+            for database, actions in restrictions.database.items()
+        }
+    if restrictions.resource:
+        out["r"] = {}
+        for database, resources in restrictions.resource.items():
+            for resource, actions in resources.items():
+                out["r"].setdefault(database, {})[resource] = [abbr(a) for a in actions]
+    return out
+
+
 class ManagedTokenHandler(TokenHandler):
     """Token handler for database-backed managed tokens (dsatok_ prefix)."""
 
@@ -31,19 +62,7 @@ class ManagedTokenHandler(TokenHandler):
     async def create_token(
         self, datasette, actor_id, *, expires_after=None, restrictions=None
     ):
-        # Ride on the signed-token handler to abbreviate restrictions into _r
-        permissions = None
-        if restrictions is not None:
-            throwaway_signed = await datasette.create_token(
-                actor_id,
-                expires_after=expires_after,
-                restrictions=restrictions,
-                handler="signed",
-            )
-            token_bits = datasette.unsign(
-                throwaway_signed[len("dstok_") :], namespace="token"
-            )
-            permissions = token_bits.get("_r") or None
+        permissions = _abbreviate_restrictions(datasette, restrictions)
 
         config = Config(datasette)
         db = config.db

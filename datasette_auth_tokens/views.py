@@ -65,17 +65,15 @@ async def create_api_token(request, datasette):
                 action = bits[3]
                 restrictions.allow_resource(database, resource, action)
 
-        # Reuse Datasette signed tokens mechanism to create parts of the token
-        throwaway_signed_token = await datasette.create_token(
-            request.actor["id"],
-            expires_after=expires_after,
-            restrictions=restrictions,
-            handler="signed",
-        )
-        token_bits = datasette.unsign(
-            throwaway_signed_token[len("dstok_") :], namespace="token"
-        )
-        permissions = token_bits.get("_r") or None
+        from . import _abbreviate_restrictions
+
+        permissions = _abbreviate_restrictions(datasette, restrictions)
+        created_timestamp = int(time.time())
+        token_bits = {"a": request.actor["id"], "t": created_timestamp}
+        if expires_after:
+            token_bits["d"] = expires_after
+        if permissions:
+            token_bits["_r"] = permissions
 
         config = Config(datasette)
         db = config.db
@@ -91,7 +89,7 @@ async def create_api_token(request, datasette):
                 "permissions": json.dumps(permissions),
                 "description": post.get("description") or None,
                 "actor_id": request.actor["id"],
-                "created_timestamp": int(time.time()),
+                "created_timestamp": created_timestamp,
                 "expires_after_seconds": expires_after,
             },
         )

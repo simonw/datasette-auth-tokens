@@ -2,6 +2,9 @@ from datasette_test import Datasette
 from datasette.plugins import pm
 from datasette import hookimpl
 from datasette.permissions import PermissionSQL
+from datasette.tokens import TokenRestrictions
+from datasette_auth_tokens import ManagedTokenHandler
+import json
 import pytest
 import pytest_asyncio
 import sqlite_utils
@@ -501,3 +504,119 @@ async def test_no_table_heading_if_no_tables(tmpdir, has_a_table):
         assert fragment in response.text
     else:
         assert fragment not in response.text
+
+
+@pytest.mark.asyncio
+async def test_query_param_token_authenticates(ds_managed):
+    """A dsatok_ token passed via ?_auth_token= query string authenticates."""
+    token_id, token = await _create_token(ds_managed)
+    response = await ds_managed.client.get("/-/actor.json?_auth_token={}".format(token))
+    assert response.status_code == 200
+    assert response.json() == {
+        "actor": {"id": "root", "token": "dsatok", "token_id": token_id}
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "restrictions,expected_r",
+    [
+        (
+            TokenRestrictions().allow_database("demo", "insert-row"),
+            {"d": {"demo": ["ir"]}},
+        ),
+        (
+            TokenRestrictions().allow_resource("demo", "foo", "view-table"),
+            {"r": {"demo": {"foo": ["vt"]}}},
+        ),
+    ],
+)
+async def test_query_param_token_with_restrictions(
+    ds_managed, restrictions, expected_r
+):
+    """A dsatok_ token with _r restrictions sent via ?_auth_token= exposes
+    those restrictions on the resolved actor."""
+    await ds_managed.invoke_startup()
+    handler = ManagedTokenHandler()
+    token = await handler.create_token(ds_managed, "root", restrictions=restrictions)
+    token_id = ds_managed.unsign(token[len("dsatok_") :], namespace="dsatok")
+    response = await ds_managed.client.get("/-/actor.json?_auth_token={}".format(token))
+    assert response.status_code == 200
+    assert response.json() == {
+        "actor": {
+            "id": "root",
+            "token": "dsatok",
+            "token_id": token_id,
+            "_r": expected_r,
+        }
+    }
+
+
+@pytest.mark.asyncio
+async def test_handler_create_token_stores_abbreviated_r(ds_managed):
+    """ManagedTokenHandler.create_token stores abbreviated _r in the DB row
+    and the verified actor exposes a matching _r dict."""
+    await ds_managed.invoke_startup()
+    handler = ManagedTokenHandler()
+    restrictions = (
+        TokenRestrictions()
+        .allow_all("view-instance")
+        .allow_database("demo", "insert-row")
+        .allow_resource("demo", "foo", "view-table")
+    )
+    token = await handler.create_token(ds_managed, "root", restrictions=restrictions)
+    assert token.startswith("dsatok_")
+
+    expected_r = {
+        "a": ["vi"],
+        "d": {"demo": ["ir"]},
+        "r": {"demo": {"foo": ["vt"]}},
+    }
+
+    token_id = ds_managed.unsign(token[len("dsatok_") :], namespace="dsatok")
+    row = (
+        await ds_managed.get_internal_database().execute(
+            "select permissions from _datasette_auth_tokens where id=:id",
+            {"id": token_id},
+        )
+    ).first()
+    assert json.loads(row["permissions"]) == expected_r
+
+    actor = await ds_managed.verify_token(token)
+    assert actor == {
+        "id": "root",
+        "token": "dsatok",
+        "token_id": token_id,
+        "_r": expected_r,
+    }
+
+
+@pytest.mark.asyncio
+async def test_handler_create_token_when_signed_tokens_disabled(db_path):
+    """Creating a managed token with restrictions must work even when the
+    Datasette instance has allow_signed_tokens disabled -- the dsatok handler
+    should not depend on the signed-token handler."""
+    ds = Datasette(
+        [db_path],
+        plugin_config={
+            "datasette-auth-tokens": {"manage_tokens": True},
+        },
+        config={
+            "permissions": {"auth-tokens-create": {"id": "*"}},
+        },
+        settings={"allow_signed_tokens": False},
+    )
+    await ds.invoke_startup()
+    handler = ManagedTokenHandler()
+    restrictions = TokenRestrictions().allow_database("demo", "insert-row")
+    token = await handler.create_token(ds, "root", restrictions=restrictions)
+    assert token.startswith("dsatok_")
+
+    token_id = ds.unsign(token[len("dsatok_") :], namespace="dsatok")
+    row = (
+        await ds.get_internal_database().execute(
+            "select permissions from _datasette_auth_tokens where id=:id",
+            {"id": token_id},
+        )
+    ).first()
+    assert json.loads(row["permissions"]) == {"d": {"demo": ["ir"]}}
