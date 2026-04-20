@@ -154,9 +154,12 @@ curl -H 'Authorization: Bearer this-is-the-secret-token' \
 ```json
 [{"sqlite_version()": "3.31.1"}]
 ```
-Additionally you can allow passing the token as a query string parameter, although that's disabled by default given the security implications of URLs with secret tokens included. This may be useful to easily allow embedding data between different services.
 
-Enable it using the `param` config value:
+## API tokens as a query string parameter
+
+You can allow passing the API token as a query string parameter. This is disabled by default, since URLs with secret tokens need to be handled with care in case they accidentally end up in log files.
+
+Enable this feature using the `param` config value:
 
 ```json
 {
@@ -173,18 +176,6 @@ Enable it using the `param` config value:
                 }
             ],
             "param": "_auth_token"
-        }
-    },
-    "databases": {
-        ":memory:": {
-            "queries": {
-                "show_version": {
-                    "sql": "select sqlite_version()",
-                    "allow": {
-                        "bot_id": "my-bot"
-                    }
-                }
-            }
         }
     }
 }
