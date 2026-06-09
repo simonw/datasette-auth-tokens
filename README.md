@@ -119,6 +119,21 @@ This logging is on by default. To turn it off, set `"log_token_usage": false`:
 
 Usage is captured by scanning Datasette's in-memory record of recent permission checks at the end of each request, so it is most reliable for the "issue a token, exercise it, then lock it down" workflow rather than as a complete long-term audit log.
 
+#### What usage tracking does and does not capture
+
+Usage tracking records the permission checks that Datasette runs when a token **accesses a specific resource** &mdash; reading a table or row, running a SQL query, inserting/updating/deleting data, and so on. These all go through the per-resource permission check that this plugin observes.
+
+It does **not** capture the checks behind Datasette's bulk "list the resources this actor can see" operations. Those power navigation and discovery rather than direct access, including:
+
+- The instance home page (listing the databases and tables you can see)
+- A database page's list of tables
+- The search / "jump to" menu
+- Lists of canned (stored) queries
+
+Datasette resolves these with a single SQL query rather than an individual check per resource, so they are invisible to usage tracking. The practical consequence: if a token is used **only** to list or browse resources (and never to access them directly), "lock down to only these permissions" may produce a token that is too restrictive &mdash; for example a token that only ever fetched the home page could be locked down to the point where that home page no longer lists anything.
+
+For this reason, treat the "used in the last 5 minutes" list as a **starting point**: review the permission checkboxes before saving, and add any list/browse permissions the token needs.
+
 ## Hard-coded tokens
 
 Read about Datasette's [authentication and permissions system](https://datasette.readthedocs.io/en/latest/authentication.html).

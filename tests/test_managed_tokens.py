@@ -723,6 +723,22 @@ async def test_edit_page_shows_recent_usage_suggestion(ds_managed):
 
 
 @pytest.mark.asyncio
+async def test_edit_page_lockdown_has_caveat(ds_managed):
+    token_id, token = await _create_token(ds_managed, "owner")
+    await ds_managed.client.get(
+        "/demo/foo.json", headers={"Authorization": "Bearer {}".format(token)}
+    )
+    cookies = {"ds_actor": ds_managed.client.actor_cookie({"id": "owner"})}
+    response = await ds_managed.client.get(
+        "/-/api/tokens/{}/edit".format(token_id), cookies=cookies
+    )
+    assert response.status_code == 200
+    # The lockdown panel warns that only directly-accessed resources are
+    # captured, not ones the token merely listed or browsed
+    assert "accessed directly" in response.text
+
+
+@pytest.mark.asyncio
 async def test_details_page_has_edit_link(ds_managed):
     token_id, _ = await _create_token(ds_managed, "owner")
     cookies = {"ds_actor": ds_managed.client.actor_cookie({"id": "owner"})}
