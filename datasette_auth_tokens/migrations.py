@@ -64,3 +64,29 @@ def m003_add_ended_timestamp(db):
         set ended_timestamp = created_timestamp + expires_after_seconds
         where token_status = 'E'
         """)
+
+
+@migration()
+def m004_create_usage_table(db):
+    # Records which permission checks each token was used for, so we can offer
+    # a "lock this token down to what it actually used" feature.
+    db.execute("""
+    CREATE TABLE IF NOT EXISTS auth_tokens_usage (
+        id INTEGER PRIMARY KEY,
+        token_id INTEGER,        -- references _datasette_auth_tokens.id
+        when_iso TEXT,           -- PermissionCheck.when (ISO, microsecond)
+        created_ms INTEGER,      -- derived epoch ms, for range queries / pruning
+        action TEXT,
+        parent TEXT,             -- database, nullable
+        child TEXT,              -- table/resource, nullable
+        result INTEGER           -- 1 / 0
+    );
+    """)
+    db.execute("""
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_tokens_usage_dedup
+        ON auth_tokens_usage (token_id, when_iso, action, parent, child);
+    """)
+    db.execute("""
+    CREATE INDEX IF NOT EXISTS idx_auth_tokens_usage_token_time
+        ON auth_tokens_usage (token_id, created_ms);
+    """)

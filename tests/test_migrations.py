@@ -58,3 +58,22 @@ def test_migrate_from_original():
         "ended_timestamp",
         "secret_version",
     ]
+
+
+def test_usage_table_created():
+    db = sqlite_utils.Database(memory=True)
+    migration.apply(db)
+    assert "auth_tokens_usage" in db.table_names()
+    assert db["auth_tokens_usage"].columns_dict == {
+        "id": int,
+        "token_id": int,
+        "when_iso": str,
+        "created_ms": int,
+        "action": str,
+        "parent": str,
+        "child": str,
+        "result": int,
+    }
+    index_names = {index.name for index in db["auth_tokens_usage"].indexes}
+    assert "idx_auth_tokens_usage_dedup" in index_names
+    assert "idx_auth_tokens_usage_token_time" in index_names
