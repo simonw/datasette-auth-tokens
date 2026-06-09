@@ -1,6 +1,43 @@
 from typing import Optional
 import time
 
+# Per token, retain the larger of {last 5 minutes, newest 200 records}, capped
+# at 1000 rows total.
+USAGE_RETENTION_SECONDS = 5 * 60
+USAGE_RETENTION_MS = USAGE_RETENTION_SECONDS * 1000
+USAGE_RETENTION_RECENT_RECORDS = 200
+USAGE_RETENTION_MAX_RECORDS = 1000
+
+
+def prune_token_usage(conn, token_id, now_ms):
+    """Trim auth_tokens_usage rows for a single token to the retention policy.
+
+    Keeps the union of {rows within the last 5 minutes} and {the newest 200
+    rows}, then caps that union at the newest 1000 rows, deleting the rest.
+    """
+    conn.execute(
+        """
+        DELETE FROM auth_tokens_usage
+        WHERE token_id = :tid AND id NOT IN (
+            SELECT id FROM auth_tokens_usage
+            WHERE token_id = :tid AND (
+                created_ms >= :five_min_ago
+                OR id IN (
+                    SELECT id FROM auth_tokens_usage
+                    WHERE token_id = :tid ORDER BY id DESC LIMIT :recent
+                )
+            )
+            ORDER BY id DESC LIMIT :cap
+        )
+        """,
+        {
+            "tid": token_id,
+            "five_min_ago": now_ms - USAGE_RETENTION_MS,
+            "recent": USAGE_RETENTION_RECENT_RECORDS,
+            "cap": USAGE_RETENTION_MAX_RECORDS,
+        },
+    )
+
 
 def pluralize(n, unit):
     return f"{n} {unit}" if n == 1 else f"{n} {unit}s"
