@@ -36,6 +36,30 @@ dd {
     <dd><pre>{{ restrictions }}</pre></dd>
 </dl>
 
+{% if can_edit %}
+<p><a href="{{ token.id }}/edit">Edit permissions</a></p>
+{% endif %}
+
+{% if recent_checks %}
+<h2>Recent usage</h2>
+<p>The most recent permission checks made using this token.</p>
+<table class="rows-and-columns">
+    <thead>
+        <tr><th>When</th><th>Action</th><th>Resource</th><th>Result</th></tr>
+    </thead>
+    <tbody>
+        {% for check in recent_checks %}
+        <tr>
+            <td>{{ check.when_iso }}</td>
+            <td>{{ check.action }}</td>
+            <td>{% if check.child %}{{ check.parent }}/{{ check.child }}{% elif check.parent %}{{ check.parent }}{% else %}(instance){% endif %}</td>
+            <td>{{ "allowed" if check.result else "denied" }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
 {% if token_status == "Active" and can_revoke %}
 <br>
 <form class="core" action="{{ request.path }}" method="POST">

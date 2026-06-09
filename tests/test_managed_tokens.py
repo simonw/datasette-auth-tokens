@@ -44,6 +44,7 @@ async def ds_managed(db_path):
             "permissions": {
                 "auth-tokens-revoke-all": {"id": "admin"},
                 "auth-tokens-view-all": {"id": "admin"},
+                "auth-tokens-edit-all": {"id": "admin"},
                 "auth-tokens-create": {"id": "*"},
             },
         },
@@ -626,6 +627,109 @@ async def test_recent_token_usage_suggestions(ds_managed):
     assert "resource:demo:foo:view-table" in names
     # Each suggestion carries a human-readable display string
     assert all(s["display"] for s in suggestions)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "scenario,allowed",
+    (
+        ("owner", True),
+        ("admin", True),
+        ("other-user", False),
+        ("anonymous", False),
+    ),
+)
+async def test_edit_token_gating(ds_managed, scenario, allowed):
+    token_id, _ = await _create_token(ds_managed, "owner")
+    if scenario == "anonymous":
+        cookies = {}
+    else:
+        cookies = {"ds_actor": ds_managed.client.actor_cookie({"id": scenario})}
+    response = await ds_managed.client.get(
+        "/-/api/tokens/{}/edit".format(token_id), cookies=cookies
+    )
+    assert response.status_code == (200 if allowed else 403)
+
+
+@pytest.mark.asyncio
+async def test_edit_token_updates_permissions(ds_managed):
+    token_id, token = await _create_token(ds_managed, "owner")
+    cookies = {"ds_actor": ds_managed.client.actor_cookie({"id": "owner"})}
+    response = await ds_managed.client.post(
+        "/-/api/tokens/{}/edit".format(token_id),
+        data={"resource:demo:foo:view-table": "1"},
+        cookies=cookies,
+    )
+    assert response.status_code == 302
+    row = (
+        await ds_managed.get_internal_database().execute(
+            "select permissions from _datasette_auth_tokens where id=:id",
+            {"id": token_id},
+        )
+    ).first()
+    assert json.loads(row["permissions"]) == {"r": {"demo": {"foo": ["vt"]}}}
+    # Effective restrictions change immediately, no re-issue needed
+    actor_response = await ds_managed.client.get(
+        "/-/actor.json", headers={"Authorization": "Bearer {}".format(token)}
+    )
+    assert actor_response.json()["actor"]["_r"] == {"r": {"demo": {"foo": ["vt"]}}}
+
+
+@pytest.mark.asyncio
+async def test_edit_token_form_prechecks_current_restrictions(ds_managed):
+    await ds_managed.invoke_startup()
+    handler = ManagedTokenHandler()
+    token = await handler.create_token(
+        ds_managed,
+        "owner",
+        restrictions=TokenRestrictions().allow_resource("demo", "foo", "view-table"),
+    )
+    token_id = ds_managed.unsign(token[len("dsatok_") :], namespace="dsatok")
+    cookies = {"ds_actor": ds_managed.client.actor_cookie({"id": "owner"})}
+    response = await ds_managed.client.get(
+        "/-/api/tokens/{}/edit".format(token_id), cookies=cookies
+    )
+    assert response.status_code == 200
+    assert 'name="resource:demo:foo:view-table" checked' in response.text
+
+
+@pytest.mark.asyncio
+async def test_edit_revoked_token_forbidden(ds_managed):
+    token_id, _ = await _create_token(ds_managed, "owner")
+    await ds_managed.get_internal_database().execute_write(
+        "update _datasette_auth_tokens set token_status='R' where id=:id",
+        {"id": token_id},
+    )
+    cookies = {"ds_actor": ds_managed.client.actor_cookie({"id": "owner"})}
+    response = await ds_managed.client.get(
+        "/-/api/tokens/{}/edit".format(token_id), cookies=cookies
+    )
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_edit_page_shows_recent_usage_suggestion(ds_managed):
+    token_id, token = await _create_token(ds_managed, "owner")
+    await ds_managed.client.get(
+        "/demo/foo.json", headers={"Authorization": "Bearer {}".format(token)}
+    )
+    cookies = {"ds_actor": ds_managed.client.actor_cookie({"id": "owner"})}
+    response = await ds_managed.client.get(
+        "/-/api/tokens/{}/edit".format(token_id), cookies=cookies
+    )
+    assert response.status_code == 200
+    assert "Used in the last" in response.text
+    assert "demo/foo table: view-table" in response.text
+
+
+@pytest.mark.asyncio
+async def test_details_page_has_edit_link(ds_managed):
+    token_id, _ = await _create_token(ds_managed, "owner")
+    cookies = {"ds_actor": ds_managed.client.actor_cookie({"id": "owner"})}
+    response = await ds_managed.client.get(
+        "/-/api/tokens/{}".format(token_id), cookies=cookies
+    )
+    assert 'href="{}/edit"'.format(token_id) in response.text
 
 
 async def _usage_rows(ds, token_id):

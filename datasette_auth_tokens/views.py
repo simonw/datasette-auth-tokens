@@ -6,10 +6,33 @@ from datasette.utils import (
     tilde_decode,
     display_actor,
 )
-from .utils import ago_difference, format_permissions
+from .utils import (
+    ago_difference,
+    format_permissions,
+    checkbox_names_from_permissions,
+    recent_token_usage,
+    recent_token_checks,
+)
 import datetime
 import json
 import time
+
+
+def parse_restrictions_from_post(datasette, post):
+    """Build a TokenRestrictions from the create/edit form's checkbox names."""
+    restrictions = TokenRestrictions()
+    for key in post:
+        if key.startswith("all:") and key.count(":") == 1:
+            restrictions.allow_all(key.split(":")[1])
+        elif key.startswith("database:") and key.count(":") == 2:
+            bits = key.split(":")
+            restrictions.allow_database(tilde_decode(bits[1]), bits[2])
+        elif key.startswith("resource:") and key.count(":") == 3:
+            bits = key.split(":")
+            restrictions.allow_resource(
+                tilde_decode(bits[1]), tilde_decode(bits[2]), bits[3]
+            )
+    return restrictions
 
 TOKEN_PAGE_SIZE = 30
 
@@ -48,22 +71,7 @@ async def create_api_token(request, datasette):
                     errors.append("Invalid expire duration unit")
 
         # Are there any restrictions?
-        restrictions = TokenRestrictions()
-
-        for key in post:
-            if key.startswith("all:") and key.count(":") == 1:
-                restrictions.allow_all(key.split(":")[1])
-            elif key.startswith("database:") and key.count(":") == 2:
-                bits = key.split(":")
-                database = tilde_decode(bits[1])
-                action = bits[2]
-                restrictions.allow_database(database, action)
-            elif key.startswith("resource:") and key.count(":") == 3:
-                bits = key.split(":")
-                database = tilde_decode(bits[1])
-                resource = tilde_decode(bits[2])
-                action = bits[3]
-                restrictions.allow_resource(database, resource, action)
+        restrictions = parse_restrictions_from_post(datasette, post)
 
         from . import _abbreviate_restrictions
 
@@ -116,7 +124,6 @@ async def check_permission(datasette, actor):
 
 
 async def _shared(datasette, request):
-    await check_permission(datasette, request.actor)
     db = Config(datasette).db
 
     tokens_exist = bool(
@@ -287,6 +294,7 @@ async def token_details(request, datasette):
         raise Forbidden("You do not have permission to manage this token")
 
     can_revoke = await actor_can_revoke(datasette, request.actor, row["actor_id"])
+    can_edit = await actor_can_edit(datasette, request.actor, row["actor_id"])
 
     if (
         row["expires_after_seconds"]
@@ -326,6 +334,8 @@ async def token_details(request, datasette):
     if actors and actors.get(row["actor_id"]):
         actor_display = display_actor(actors[row["actor_id"]])
 
+    recent_checks = await recent_token_checks(datasette, row["id"])
+
     return Response.html(
         await datasette.render_template(
             "token_details.html",
@@ -339,8 +349,56 @@ async def token_details(request, datasette):
                 "ago_difference": ago_difference,
                 "restrictions": restrictions,
                 "can_revoke": can_revoke,
+                "can_edit": can_edit and row["token_status"] == "A",
+                "recent_checks": recent_checks,
             },
             request=request,
+        )
+    )
+
+
+async def token_edit(request, datasette):
+    from . import _abbreviate_restrictions
+
+    config = Config(datasette)
+    db = config.db
+    id = request.url_vars["id"]
+
+    row = (
+        await db.execute("select * from _datasette_auth_tokens where id = ?", (id,))
+    ).first()
+    if row is None:
+        raise NotFound("Token not found")
+
+    if not await actor_can_edit(datasette, request.actor, row["actor_id"]):
+        raise Forbidden("You do not have permission to edit this token")
+
+    if row["token_status"] != "A":
+        raise Forbidden("Cannot edit a revoked or expired token")
+
+    if request.method == "POST":
+        post = await request.post_vars()
+        restrictions = parse_restrictions_from_post(datasette, post)
+        permissions = _abbreviate_restrictions(datasette, restrictions)
+        await db.execute_write(
+            "update _datasette_auth_tokens set permissions = :permissions where id = :id",
+            {"permissions": json.dumps(permissions), "id": id},
+        )
+        return Response.redirect(datasette.urls.path("/-/api/tokens/{}".format(id)))
+
+    context = await _shared(datasette, request)
+    current = json.loads(row["permissions"])
+    context.update(
+        {
+            "token": row,
+            "checked_names": checkbox_names_from_permissions(datasette, current),
+            "suggestions": await recent_token_usage(datasette, row["id"]),
+            "usage_window_minutes": 5,
+        }
+    )
+    return Response.html(
+        await datasette.render_template(
+            "edit_api_token.html", context, request=request
         )
     )
 
@@ -370,6 +428,16 @@ async def actor_can_revoke(datasette, actor, token_actor_id):
         return True
     # User with auth-tokens-revoke-all can revoke any token
     return await datasette.allowed(action="auth-tokens-revoke-all", actor=actor)
+
+
+async def actor_can_edit(datasette, actor, token_actor_id):
+    if not actor or not actor.get("id"):
+        # Only works for actors that have an ID set
+        return False
+    if token_actor_id and str(token_actor_id) == str(actor.get("id")):
+        return True
+    # User with auth-tokens-edit-all can edit any token
+    return await datasette.allowed(action="auth-tokens-edit-all", actor=actor)
 
 
 class Config:

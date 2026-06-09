@@ -14,6 +14,7 @@ from .views import (
     check_permission,
     tokens_index,
     token_details,
+    token_edit,
     Config,
 )
 from .migrations import migration
@@ -155,6 +156,7 @@ def register_routes(datasette):
         (r"^/-/api/tokens/create$", create_api_token),
         (r"^/-/api/tokens$", tokens_index),
         (r"^/-/api/tokens/(?P<id>\d+)$", token_details),
+        (r"^/-/api/tokens/(?P<id>\d+)/edit$", token_edit),
     ]
 
 
@@ -170,6 +172,11 @@ def register_actions(datasette):
             name="auth-tokens-view-all",
             abbr=None,
             description="View all API tokens",
+        ),
+        Action(
+            name="auth-tokens-edit-all",
+            abbr=None,
+            description="Edit permissions of any API tokens",
         ),
         Action(
             name="auth-tokens-create",
