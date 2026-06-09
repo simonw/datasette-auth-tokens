@@ -86,6 +86,39 @@ A token can be revoked by the user that created it by clicking the "Revoke this 
 
 A user with the `auth-tokens-revoke-all` permission can revoke any token.
 
+### Editing token permissions
+
+The permissions (restrictions) of an existing token can be edited from the "Edit permissions" link on the token's page. A managed token is just a signed reference to a database row, and its restrictions are loaded fresh from that row on every request, so **editing a token's permissions takes effect immediately with no need to issue a replacement token**.
+
+Editing can only ever restrict a token to a subset of the permissions its owning actor already has.
+
+A token can be edited by the user that created it. A user with the `auth-tokens-edit-all` permission can edit any token.
+
+### Locking a token down to the permissions it actually used
+
+This plugin records which permission checks each token is used for, which enables a useful workflow:
+
+1. Issue a token with broad permissions.
+2. Use that token via the API to perform the actions you actually need it to perform.
+3. Open the token's "Edit permissions" page. A "Used in the last 5 minutes" panel lists the exact actions the token successfully exercised, with a "Lock down to only these permissions" button that restricts the token to just those actions.
+
+Token usage is recorded in an `auth_tokens_usage` table (stored in the same database as the tokens). For each token the plugin retains the larger of {the last 5 minutes of usage, the 200 most recent records}, capped at 1000 rows per token. The token's page also shows a "Recent usage" table of the most recent checks, including denied ones.
+
+This logging is on by default. To turn it off, set `"log_token_usage": false`:
+
+```json
+{
+    "plugins": {
+        "datasette-auth-tokens": {
+            "manage_tokens": true,
+            "log_token_usage": false
+        }
+    }
+}
+```
+
+Usage is captured by scanning Datasette's in-memory record of recent permission checks at the end of each request, so it is most reliable for the "issue a token, exercise it, then lock it down" workflow rather than as a complete long-term audit log.
+
 ## Hard-coded tokens
 
 Read about Datasette's [authentication and permissions system](https://datasette.readthedocs.io/en/latest/authentication.html).
