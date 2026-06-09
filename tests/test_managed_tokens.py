@@ -591,6 +591,43 @@ async def test_handler_create_token_stores_abbreviated_r(ds_managed):
     }
 
 
+@pytest.mark.asyncio
+async def test_checkbox_names_from_permissions(ds_managed):
+    from datasette_auth_tokens.utils import checkbox_names_from_permissions
+
+    await ds_managed.invoke_startup()
+    permissions = {"a": ["vi"], "d": {"demo": ["ir"]}, "r": {"demo": {"foo": ["vt"]}}}
+    names = checkbox_names_from_permissions(ds_managed, permissions)
+    assert names == {
+        "all:view-instance",
+        "database:demo:insert-row",
+        "resource:demo:foo:view-table",
+    }
+
+
+@pytest.mark.asyncio
+async def test_checkbox_names_from_permissions_empty(ds_managed):
+    from datasette_auth_tokens.utils import checkbox_names_from_permissions
+
+    await ds_managed.invoke_startup()
+    assert checkbox_names_from_permissions(ds_managed, None) == set()
+
+
+@pytest.mark.asyncio
+async def test_recent_token_usage_suggestions(ds_managed):
+    from datasette_auth_tokens.utils import recent_token_usage
+
+    token_id, token = await _create_token(ds_managed)
+    await ds_managed.client.get(
+        "/demo/foo.json", headers={"Authorization": "Bearer {}".format(token)}
+    )
+    suggestions = await recent_token_usage(ds_managed, token_id)
+    names = {s["name"] for s in suggestions}
+    assert "resource:demo:foo:view-table" in names
+    # Each suggestion carries a human-readable display string
+    assert all(s["display"] for s in suggestions)
+
+
 async def _usage_rows(ds, token_id):
     db = ds.get_internal_database()
     return [

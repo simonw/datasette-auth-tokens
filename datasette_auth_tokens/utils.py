@@ -1,3 +1,4 @@
+from datasette.utils import tilde_encode
 from typing import Optional
 import time
 
@@ -81,13 +82,117 @@ def ago_difference(time1: int, time2: Optional[int] = None):
         return "{} ago".format(combined)
 
 
+def abbr_to_name(datasette):
+    """Map each action's abbreviation back to its full name."""
+    return {
+        action.abbr: action.name
+        for action in datasette.actions.values()
+        if action.abbr
+    }
+
+
+def checkbox_names_from_permissions(datasette, permissions):
+    """Reverse an abbreviated _r permissions dict into the set of checkbox
+    `name` strings used by the create/edit token forms, so a form can be
+    pre-checked to match a token's current restrictions."""
+    if not permissions:
+        return set()
+    abbreviations = abbr_to_name(datasette)
+
+    def name(code):
+        return abbreviations.get(code, code)
+
+    names = set()
+    for code in permissions.get("a", []):
+        names.add("all:{}".format(name(code)))
+    for database, codes in permissions.get("d", {}).items():
+        for code in codes:
+            names.add("database:{}:{}".format(tilde_encode(database), name(code)))
+    for database, tables in permissions.get("r", {}).items():
+        for table, codes in tables.items():
+            for code in codes:
+                names.add(
+                    "resource:{}:{}:{}".format(
+                        tilde_encode(database), tilde_encode(table), name(code)
+                    )
+                )
+    return names
+
+
+def _usage_suggestion(action, parent, child):
+    """Map a (action, parent, child) usage row to a checkbox name + display."""
+    if child is not None:
+        return {
+            "name": "resource:{}:{}:{}".format(
+                tilde_encode(parent), tilde_encode(child), action
+            ),
+            "display": "{}/{} table: {}".format(parent, child, action),
+            "action": action,
+            "parent": parent,
+            "child": child,
+        }
+    if parent is not None:
+        return {
+            "name": "database:{}:{}".format(tilde_encode(parent), action),
+            "display": "{} database: {}".format(parent, action),
+            "action": action,
+            "parent": parent,
+            "child": child,
+        }
+    return {
+        "name": "all:{}".format(action),
+        "display": "all databases and tables: {}".format(action),
+        "action": action,
+        "parent": parent,
+        "child": child,
+    }
+
+
+async def recent_token_usage(datasette, token_id, within_seconds=USAGE_RETENTION_SECONDS):
+    """Distinct actions a token successfully exercised within the time window,
+    as form-checkbox suggestions for the "lock it down" feature."""
+    from .views import Config
+
+    db = Config(datasette).db
+    cutoff_ms = int((time.time() - within_seconds) * 1000)
+    rows = (
+        await db.execute(
+            """
+            select distinct action, parent, child
+            from auth_tokens_usage
+            where token_id = :token_id and result = 1 and created_ms >= :cutoff
+            order by action, parent, child
+            """,
+            {"token_id": token_id, "cutoff": cutoff_ms},
+        )
+    ).rows
+    return [_usage_suggestion(row["action"], row["parent"], row["child"]) for row in rows]
+
+
+async def recent_token_checks(datasette, token_id, limit=50):
+    """Most recent permission checks for a token (including denied ones), for
+    display on the token details page."""
+    from .views import Config
+
+    db = Config(datasette).db
+    rows = (
+        await db.execute(
+            """
+            select action, parent, child, result, when_iso, created_ms
+            from auth_tokens_usage
+            where token_id = :token_id
+            order by id desc limit :limit
+            """,
+            {"token_id": token_id, "limit": limit},
+        )
+    ).rows
+    return [dict(row) for row in rows]
+
+
 def format_permissions(datasette, permissions_dict):
     if not permissions_dict:
         return "All permissions"
-    abbreviations = {}
-    for action in datasette.actions.values():
-        if action.abbr:
-            abbreviations[action.abbr] = action.name
+    abbreviations = abbr_to_name(datasette)
 
     output = []
 
