@@ -377,6 +377,7 @@ class Config:
         self._plugin_config = datasette.plugin_config("datasette-auth-tokens") or {}
         self._datasette = datasette
         self.enabled = self._plugin_config.get("manage_tokens")
+        self.log_token_usage = self._plugin_config.get("log_token_usage", True)
 
     def get(self, key):
         return self._plugin_config.get(key)

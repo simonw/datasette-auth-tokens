@@ -1,6 +1,8 @@
 from datasette import hookimpl, Forbidden
 from datasette.permissions import Action
 from datasette.tokens import TokenHandler
+import datetime
+import functools
 import itsdangerous
 import json
 import secrets
@@ -15,6 +17,7 @@ from .views import (
     Config,
 )
 from .migrations import migration
+from .utils import prune_token_usage
 
 TOKEN_STATUSES = {
     "A": "Active",
@@ -235,6 +238,85 @@ def actor_from_request(datasette, request):
                 }
 
     return inner
+
+
+@hookimpl
+def asgi_wrapper(datasette):
+    def wrap(app):
+        @functools.wraps(app)
+        async def wrapped_app(scope, receive, send):
+            await app(scope, receive, send)
+            if scope["type"] == "http":
+                try:
+                    await _record_token_usage(datasette)
+                except Exception:
+                    # Usage logging must never break a request
+                    pass
+
+        return wrapped_app
+
+    return wrap
+
+
+def _iso_to_ms(when_iso):
+    return int(datetime.datetime.fromisoformat(when_iso).timestamp() * 1000)
+
+
+async def _record_token_usage(datasette):
+    """Drain new token-attributed permission checks from the in-memory deque
+    into the auth_tokens_usage table, then prune to the retention policy."""
+    config = Config(datasette)
+    if not config.enabled or not config.log_token_usage:
+        return
+    checks = list(getattr(datasette, "_permission_checks", []) or [])
+    if not checks:
+        return
+    high_water = getattr(datasette, "_auth_tokens_usage_high_water", "")
+    new_checks = [
+        check
+        for check in checks
+        if check.when > high_water
+        and check.actor
+        and check.actor.get("token_id") is not None
+    ]
+    # Advance past everything currently in the deque, even non-token checks
+    datasette._auth_tokens_usage_high_water = checks[-1].when
+    if not new_checks:
+        return
+
+    rows = []
+    token_ids = set()
+    for check in new_checks:
+        token_id = check.actor["token_id"]
+        token_ids.add(token_id)
+        rows.append(
+            {
+                "token_id": token_id,
+                "when_iso": check.when,
+                "created_ms": _iso_to_ms(check.when),
+                "action": check.action,
+                "parent": check.parent,
+                "child": check.child,
+                "result": 1 if check.result else 0,
+            }
+        )
+    now_ms = int(time.time() * 1000)
+
+    def write(conn):
+        with conn:
+            conn.executemany(
+                """
+                insert or ignore into auth_tokens_usage
+                    (token_id, when_iso, created_ms, action, parent, child, result)
+                values
+                    (:token_id, :when_iso, :created_ms, :action, :parent, :child, :result)
+                """,
+                rows,
+            )
+            for token_id in token_ids:
+                prune_token_usage(conn, token_id, now_ms)
+
+    await config.db.execute_write_fn(write)
 
 
 async def _actor_from_managed(datasette, incoming_token):

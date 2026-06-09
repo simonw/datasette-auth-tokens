@@ -591,6 +591,73 @@ async def test_handler_create_token_stores_abbreviated_r(ds_managed):
     }
 
 
+async def _usage_rows(ds, token_id):
+    db = ds.get_internal_database()
+    return [
+        dict(r)
+        for r in (
+            await db.execute(
+                "select * from auth_tokens_usage where token_id = :t order by id",
+                {"t": token_id},
+            )
+        ).rows
+    ]
+
+
+@pytest.mark.asyncio
+async def test_token_usage_is_recorded(ds_managed):
+    """Using a token records the permission checks it triggered."""
+    token_id, token = await _create_token(ds_managed)
+    response = await ds_managed.client.get(
+        "/demo/foo.json", headers={"Authorization": "Bearer {}".format(token)}
+    )
+    assert response.status_code == 200
+    rows = await _usage_rows(ds_managed, token_id)
+    assert rows
+    # Only checks attributed to this token are recorded
+    assert all(r["token_id"] == token_id for r in rows)
+    seen = {(r["action"], r["parent"], r["child"], r["result"]) for r in rows}
+    assert ("view-table", "demo", "foo", 1) in seen
+
+
+@pytest.mark.asyncio
+async def test_token_usage_not_duplicated(ds_managed):
+    """A later request must not re-insert checks that are still in the
+    in-memory deque from an earlier request."""
+    token_id, token = await _create_token(ds_managed)
+    await ds_managed.client.get(
+        "/demo/foo.json", headers={"Authorization": "Bearer {}".format(token)}
+    )
+    first = await _usage_rows(ds_managed, token_id)
+    assert first
+    # An anonymous request produces no new token checks
+    await ds_managed.client.get("/demo/foo.json")
+    second = await _usage_rows(ds_managed, token_id)
+    assert len(second) == len(first)
+
+
+@pytest.mark.asyncio
+async def test_token_usage_can_be_disabled(db_path):
+    ds = Datasette(
+        [db_path],
+        plugin_config={
+            "datasette-auth-tokens": {
+                "manage_tokens": True,
+                "param": "_auth_token",
+                "log_token_usage": False,
+            }
+        },
+        config={"permissions": {"auth-tokens-create": {"id": "*"}}},
+    )
+    token_id, token = await _create_token(ds)
+    await ds.client.get(
+        "/demo/foo.json", headers={"Authorization": "Bearer {}".format(token)}
+    )
+    db = ds.get_internal_database()
+    count = (await db.execute("select count(*) from auth_tokens_usage")).first()[0]
+    assert count == 0
+
+
 @pytest.mark.asyncio
 async def test_handler_create_token_when_signed_tokens_disabled(db_path):
     """Creating a managed token with restrictions must work even when the
