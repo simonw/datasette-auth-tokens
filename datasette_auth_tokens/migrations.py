@@ -28,7 +28,7 @@ def m002_rename_live_to_active(db):
     # In case anything is left over - I made this change before
     # I introduced migrations
     db["_datasette_auth_tokens"].transform(defaults={"token_status": "A"})
-    db.query("""
+    db.execute("""
         update _datasette_auth_tokens
         set token_status = 'A'
         where token_status = 'L'
@@ -54,12 +54,12 @@ def m003_add_ended_timestamp(db):
         ]
     )
     # Set it to now for any revoked tokens
-    db.query(
+    db.execute(
         "update _datasette_auth_tokens set ended_timestamp = :now where token_status = 'R'",
         {"now": int(time.time())},
     )
     # Set it to created_timestamp + expires_after_seconds for any expired tokens
-    db.query("""
+    db.execute("""
         update _datasette_auth_tokens
         set ended_timestamp = created_timestamp + expires_after_seconds
         where token_status = 'E'
