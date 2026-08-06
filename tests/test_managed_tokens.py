@@ -177,7 +177,7 @@ async def test_active_revoked_expired_tokens(ds_managed, ds_api_db, status, data
         "/-/actor.json", headers={"Authorization": "Bearer {}".format(token)}
     )
     assert actor_response.status_code == 200
-    assert actor_response.json() == {"actor": expected_actor}
+    assert actor_response.json() == {"actor": expected_actor, "ok": True}
 
 
 async def _create_token(ds_managed, actor_id="root"):
@@ -513,7 +513,8 @@ async def test_query_param_token_authenticates(ds_managed):
     response = await ds_managed.client.get("/-/actor.json?_auth_token={}".format(token))
     assert response.status_code == 200
     assert response.json() == {
-        "actor": {"id": "root", "token": "dsatok", "token_id": token_id}
+        "actor": {"id": "root", "token": "dsatok", "token_id": token_id},
+        "ok": True,
     }
 
 
@@ -548,7 +549,8 @@ async def test_query_param_token_with_restrictions(
             "token": "dsatok",
             "token_id": token_id,
             "_r": expected_r,
-        }
+        },
+        "ok": True,
     }
 
 

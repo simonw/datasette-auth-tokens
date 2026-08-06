@@ -7,7 +7,7 @@ authors = [{name = "Simon Willison"}]
 license = "Apache-2.0"
 requires-python = ">=3.10"
 dependencies = [
-    "datasette>=1.0a28",
+    "datasette>=1.0a38",
     "sqlite-utils",
     "sqlite-migrate",
 ]

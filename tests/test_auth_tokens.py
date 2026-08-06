@@ -134,7 +134,7 @@ async def test_actor(ds, token, expected_actor):
         headers={"Authorization": "Bearer {}".format(token)},
         follow_redirects=True,
     )
-    assert response.json() == {"actor": expected_actor}
+    assert response.json() == {"actor": expected_actor, "ok": True}
 
 
 @pytest.mark.parametrize(
