@@ -44,6 +44,7 @@ async def ds_managed(db_path):
             "permissions": {
                 "auth-tokens-revoke-all": {"id": "admin"},
                 "auth-tokens-view-all": {"id": "admin"},
+                "auth-tokens-edit-all": {"id": "admin"},
                 "auth-tokens-create": {"id": "*"},
             },
         },
@@ -591,6 +592,229 @@ async def test_handler_create_token_stores_abbreviated_r(ds_managed):
         "token_id": token_id,
         "_r": expected_r,
     }
+
+
+@pytest.mark.asyncio
+async def test_checkbox_names_from_permissions(ds_managed):
+    from datasette_auth_tokens.utils import checkbox_names_from_permissions
+
+    await ds_managed.invoke_startup()
+    permissions = {"a": ["vi"], "d": {"demo": ["ir"]}, "r": {"demo": {"foo": ["vt"]}}}
+    names = checkbox_names_from_permissions(ds_managed, permissions)
+    assert names == {
+        "all:view-instance",
+        "database:demo:insert-row",
+        "resource:demo:foo:view-table",
+    }
+
+
+@pytest.mark.asyncio
+async def test_checkbox_names_from_permissions_empty(ds_managed):
+    from datasette_auth_tokens.utils import checkbox_names_from_permissions
+
+    await ds_managed.invoke_startup()
+    assert checkbox_names_from_permissions(ds_managed, None) == set()
+
+
+@pytest.mark.asyncio
+async def test_recent_token_usage_suggestions(ds_managed):
+    from datasette_auth_tokens.utils import recent_token_usage
+
+    token_id, token = await _create_token(ds_managed)
+    await ds_managed.client.get(
+        "/demo/foo.json", headers={"Authorization": "Bearer {}".format(token)}
+    )
+    suggestions = await recent_token_usage(ds_managed, token_id)
+    names = {s["name"] for s in suggestions}
+    assert "resource:demo:foo:view-table" in names
+    # Each suggestion carries a human-readable display string
+    assert all(s["display"] for s in suggestions)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "scenario,allowed",
+    (
+        ("owner", True),
+        ("admin", True),
+        ("other-user", False),
+        ("anonymous", False),
+    ),
+)
+async def test_edit_token_gating(ds_managed, scenario, allowed):
+    token_id, _ = await _create_token(ds_managed, "owner")
+    if scenario == "anonymous":
+        cookies = {}
+    else:
+        cookies = {"ds_actor": ds_managed.client.actor_cookie({"id": scenario})}
+    response = await ds_managed.client.get(
+        "/-/api/tokens/{}/edit".format(token_id), cookies=cookies
+    )
+    assert response.status_code == (200 if allowed else 403)
+
+
+@pytest.mark.asyncio
+async def test_edit_token_updates_permissions(ds_managed):
+    token_id, token = await _create_token(ds_managed, "owner")
+    cookies = {"ds_actor": ds_managed.client.actor_cookie({"id": "owner"})}
+    response = await ds_managed.client.post(
+        "/-/api/tokens/{}/edit".format(token_id),
+        data={"resource:demo:foo:view-table": "1"},
+        cookies=cookies,
+    )
+    assert response.status_code == 302
+    row = (
+        await ds_managed.get_internal_database().execute(
+            "select permissions from _datasette_auth_tokens where id=:id",
+            {"id": token_id},
+        )
+    ).first()
+    assert json.loads(row["permissions"]) == {"r": {"demo": {"foo": ["vt"]}}}
+    # Effective restrictions change immediately, no re-issue needed
+    actor_response = await ds_managed.client.get(
+        "/-/actor.json", headers={"Authorization": "Bearer {}".format(token)}
+    )
+    assert actor_response.json()["actor"]["_r"] == {"r": {"demo": {"foo": ["vt"]}}}
+
+
+@pytest.mark.asyncio
+async def test_edit_token_form_prechecks_current_restrictions(ds_managed):
+    await ds_managed.invoke_startup()
+    handler = ManagedTokenHandler()
+    token = await handler.create_token(
+        ds_managed,
+        "owner",
+        restrictions=TokenRestrictions().allow_resource("demo", "foo", "view-table"),
+    )
+    token_id = ds_managed.unsign(token[len("dsatok_") :], namespace="dsatok")
+    cookies = {"ds_actor": ds_managed.client.actor_cookie({"id": "owner"})}
+    response = await ds_managed.client.get(
+        "/-/api/tokens/{}/edit".format(token_id), cookies=cookies
+    )
+    assert response.status_code == 200
+    assert 'name="resource:demo:foo:view-table" checked' in response.text
+
+
+@pytest.mark.asyncio
+async def test_edit_revoked_token_forbidden(ds_managed):
+    token_id, _ = await _create_token(ds_managed, "owner")
+    await ds_managed.get_internal_database().execute_write(
+        "update _datasette_auth_tokens set token_status='R' where id=:id",
+        {"id": token_id},
+    )
+    cookies = {"ds_actor": ds_managed.client.actor_cookie({"id": "owner"})}
+    response = await ds_managed.client.get(
+        "/-/api/tokens/{}/edit".format(token_id), cookies=cookies
+    )
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_edit_page_shows_recent_usage_suggestion(ds_managed):
+    token_id, token = await _create_token(ds_managed, "owner")
+    await ds_managed.client.get(
+        "/demo/foo.json", headers={"Authorization": "Bearer {}".format(token)}
+    )
+    cookies = {"ds_actor": ds_managed.client.actor_cookie({"id": "owner"})}
+    response = await ds_managed.client.get(
+        "/-/api/tokens/{}/edit".format(token_id), cookies=cookies
+    )
+    assert response.status_code == 200
+    assert "Used in the last" in response.text
+    assert "demo/foo table: view-table" in response.text
+
+
+@pytest.mark.asyncio
+async def test_edit_page_lockdown_has_caveat(ds_managed):
+    token_id, token = await _create_token(ds_managed, "owner")
+    await ds_managed.client.get(
+        "/demo/foo.json", headers={"Authorization": "Bearer {}".format(token)}
+    )
+    cookies = {"ds_actor": ds_managed.client.actor_cookie({"id": "owner"})}
+    response = await ds_managed.client.get(
+        "/-/api/tokens/{}/edit".format(token_id), cookies=cookies
+    )
+    assert response.status_code == 200
+    # The lockdown panel warns that only directly-accessed resources are
+    # captured, not ones the token merely listed or browsed
+    assert "accessed directly" in response.text
+
+
+@pytest.mark.asyncio
+async def test_details_page_has_edit_link(ds_managed):
+    token_id, _ = await _create_token(ds_managed, "owner")
+    cookies = {"ds_actor": ds_managed.client.actor_cookie({"id": "owner"})}
+    response = await ds_managed.client.get(
+        "/-/api/tokens/{}".format(token_id), cookies=cookies
+    )
+    assert 'href="{}/edit"'.format(token_id) in response.text
+
+
+async def _usage_rows(ds, token_id):
+    db = ds.get_internal_database()
+    return [
+        dict(r)
+        for r in (
+            await db.execute(
+                "select * from auth_tokens_usage where token_id = :t order by id",
+                {"t": token_id},
+            )
+        ).rows
+    ]
+
+
+@pytest.mark.asyncio
+async def test_token_usage_is_recorded(ds_managed):
+    """Using a token records the permission checks it triggered."""
+    token_id, token = await _create_token(ds_managed)
+    response = await ds_managed.client.get(
+        "/demo/foo.json", headers={"Authorization": "Bearer {}".format(token)}
+    )
+    assert response.status_code == 200
+    rows = await _usage_rows(ds_managed, token_id)
+    assert rows
+    # Only checks attributed to this token are recorded
+    assert all(r["token_id"] == token_id for r in rows)
+    seen = {(r["action"], r["parent"], r["child"], r["result"]) for r in rows}
+    assert ("view-table", "demo", "foo", 1) in seen
+
+
+@pytest.mark.asyncio
+async def test_token_usage_not_duplicated(ds_managed):
+    """A later request must not re-insert checks that are still in the
+    in-memory deque from an earlier request."""
+    token_id, token = await _create_token(ds_managed)
+    await ds_managed.client.get(
+        "/demo/foo.json", headers={"Authorization": "Bearer {}".format(token)}
+    )
+    first = await _usage_rows(ds_managed, token_id)
+    assert first
+    # An anonymous request produces no new token checks
+    await ds_managed.client.get("/demo/foo.json")
+    second = await _usage_rows(ds_managed, token_id)
+    assert len(second) == len(first)
+
+
+@pytest.mark.asyncio
+async def test_token_usage_can_be_disabled(db_path):
+    ds = Datasette(
+        [db_path],
+        plugin_config={
+            "datasette-auth-tokens": {
+                "manage_tokens": True,
+                "param": "_auth_token",
+                "log_token_usage": False,
+            }
+        },
+        config={"permissions": {"auth-tokens-create": {"id": "*"}}},
+    )
+    token_id, token = await _create_token(ds)
+    await ds.client.get(
+        "/demo/foo.json", headers={"Authorization": "Bearer {}".format(token)}
+    )
+    db = ds.get_internal_database()
+    count = (await db.execute("select count(*) from auth_tokens_usage")).first()[0]
+    assert count == 0
 
 
 @pytest.mark.asyncio

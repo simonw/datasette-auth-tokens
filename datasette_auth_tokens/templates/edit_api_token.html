@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block title %}Edit API token{% if token.description %}: {{ token.description }}{% endif %}{% endblock %}
+
+{% block extra_head %}
+<style type="text/css">
+#restrict-permissions label {
+  display: inline;
+  width: 90%;
+}
+form div label {
+  /* Defaults to width: 15% which looks bad */
+  width: auto;
+}
+#suggested-usage {
+  border: 1px solid #ccc;
+  padding: 0.5em 1em;
+  margin-bottom: 1em;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<h1>Edit API token: {{ token.id }}</h1>
+
+<p><a href="{{ urls.path('-/api/tokens/' + token.id|string) }}">Back to token</a> &middot; <a href="{{ urls.path('-/api/tokens') }}">List all tokens</a></p>
+
+<p>Editing these permissions takes effect immediately for the existing token &mdash; there is no need to issue a new one. Permissions can only ever restrict the token to a subset of what <strong>{{ request.actor.username or request.actor.id }}</strong> can already do.</p>
+
+{% if suggestions %}
+  <div id="suggested-usage">
+    <h2>Used in the last {{ usage_window_minutes }} minutes</h2>
+    <p>This token successfully used these {{ suggestions|length }} permission{{ "" if suggestions|length == 1 else "s" }}:</p>
+    <ul>
+      {% for suggestion in suggestions %}
+        <li>{{ suggestion.display }}</li>
+      {% endfor %}
+    </ul>
+    <button type="button" id="apply-suggestions">Lock down to only these permissions</button>
+    <p style="margin-top: 0.75em; font-size: 0.9em; color: #555;">This list only covers resources the token <strong>accessed directly</strong>. Actions it used only to <em>list or browse</em> resources &mdash; the home page, a database's table list, the search/jump menu &mdash; are not captured here, so review the checkboxes below before saving.</p>
+  </div>
+{% endif %}
+
+<form class="core" action="{{ request.path }}" method="post">
+  <div>
+    <input type="submit" value="Save permissions">
+
+    <p style="margin-top: 1em" id="token-summary"></p>
+
+    <h2>All databases and tables</h2>
+    <ul>
+      {% for permission in all_permissions %}
+        <li><label><input type="checkbox" name="all:{{ permission.name }}"{% if "all:" + permission.name in checked_names %} checked{% endif %}> {{ permission.name }}</label> - {{ permission.description }}</li>
+      {% endfor %}
+    </ul>
+
+    {% for database in database_with_tables %}
+      <h2>All tables in "{{ database.name }}"</h2>
+      <ul>
+        {% for permission in database_permissions %}
+          <li><label><input type="checkbox" name="database:{{ database.encoded }}:{{ permission.name }}"{% if "database:" + database.encoded + ":" + permission.name in checked_names %} checked{% endif %}> {{ permission.name }}</label> - {{ permission.description }}</li>
+        {% endfor %}
+        {% if database.tables %}
+          {% for permission in resource_permissions %}
+            <li><label><input type="checkbox" name="database:{{ database.encoded }}:{{ permission.name }}"{% if "database:" + database.encoded + ":" + permission.name in checked_names %} checked{% endif %}> {{ permission.name }}</label> - {{ permission.description }}</li>
+          {% endfor %}
+        {% endif %}
+      </ul>
+    {% endfor %}
+    {% if databases_with_at_least_one_table %}
+    <h2>Specific tables in specific databases</h2>
+    {% for database in databases_with_at_least_one_table %}
+      {% for table in database.tables %}
+        <h3>{{ database.name }}: {{ table.name }}</h3>
+        <ul>
+          {% for permission in resource_permissions %}
+            <li><label><input type="checkbox" name="resource:{{ database.encoded }}:{{ table.encoded }}:{{ permission.name }}"{% if "resource:" + database.encoded + ":" + table.encoded + ":" + permission.name in checked_names %} checked{% endif %}> {{ permission.name }}</label> - {{ permission.description }}</li>
+          {% endfor %}
+        </ul>
+      {% endfor %}
+    {% endfor %}
+    {% endif %}
+</form>
+</div>
+
+<script>
+var suggestedNames = {{ suggestions|map(attribute="name")|list|tojson }};
+
+function updateTokenSummary() {
+  var allChecked = document.querySelectorAll('input[type="checkbox"]:checked');
+  var checkedValues = [];
+  for (var i = 0; i < allChecked.length; i++) {
+    checkedValues.push(humanPermission(allChecked[i].name));
+  }
+  var tokenSummary = document.querySelector('#token-summary');
+  if (checkedValues.length == 0) {
+    tokenSummary.innerHTML = 'Token will have all of the permissions of your current user';
+  } else {
+    let html = ['<ul style="margin-top: 0.5em">'];
+    checkedValues.forEach(function(value) {
+      html.push('<li style="list-style-type: disc; margin-left: 1em;">' + value + '</li>');
+    });
+    html.push('</ul>');
+    tokenSummary.innerHTML = 'Token will be restricted to: ' + html.join('');
+  }
+}
+
+function humanPermission(permission) {
+  var parts = permission.split(':');
+  var type = parts[0];
+  var db = parts[1];
+  var action = parts[parts.length - 1];
+  if (type == 'all') {
+    return 'all databases and tables: ' + action;
+  } else if (type == 'database') {
+    return db + ' database: ' + action;
+  } else if (type == 'resource') {
+    var table = parts[2];
+    return db + '/' + table + ' table: ' + action;
+  }
+}
+
+var applyButton = document.querySelector('#apply-suggestions');
+if (applyButton) {
+  applyButton.addEventListener('click', function() {
+    var wanted = new Set(suggestedNames);
+    document.querySelectorAll('input[type="checkbox"]').forEach(function(box) {
+      box.checked = wanted.has(box.name);
+    });
+    updateTokenSummary();
+  });
+}
+
+document.addEventListener('change', updateTokenSummary);
+updateTokenSummary();
+</script>
+
+{% endblock %}
